@@ -1,0 +1,275 @@
+// # Tetrodotoxin
+// Copyright (c) 2023-present Matt Kaes and contributors
+
+#include "perimortem/core/perimortem.h"
+
+#ifdef PERI_LINUX
+
+#include <fcntl.h>
+#include <pthread.h>
+#include <stdint.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include "photophore/platform/window.hpp"
+#include "toolchain/validation/unit_test.hpp"
+
+using namespace Photophore::Platform;
+using namespace Toolchain::Validation;
+
+static Harness WaylandDispatch = {.name = "Photophore::Wayland::Dispatch"};
+
+// A private protocol peer supplies real wire messages to the shipped client
+// library. No compositor, display device or Vulkan driver participates. Testing
+// through the socket catches incorrect argument positions that calling our
+// dispatcher functions directly would leave untested.
+struct ProtocolPeer {
+  enum Object {
+    Display,
+    Registry,
+    Compositor,
+    Shell,
+    Surface,
+    XdgSurface,
+    Toplevel,
+    Seat,
+    Keyboard,
+    Pointer,
+    Count
+  };
+  uint32_t objects[Count] = {1};
+  int socket = -1;
+  int keymap = -1;
+  pthread_t thread;
+  bool started = false;
+  bool okay = true;
+  bool published = false;
+  bool pong = false;
+  bool acknowledged = false;
+  bool committed = false;
+  bool completed = false;
+
+  ~ProtocolPeer() {
+    if (socket >= 0) {
+      shutdown(socket, SHUT_RDWR);
+    }
+    if (started) {
+      pthread_join(thread, nullptr);
+    }
+    if (socket >= 0) {
+      close(socket);
+    }
+    if (keymap >= 0) {
+      close(keymap);
+    }
+  }
+};
+
+static auto send_packet(ProtocolPeer& peer, const uint32_t* packet, size_t size)
+    -> void {
+  peer.okay &= send(peer.socket, packet, size, MSG_NOSIGNAL) == ssize_t(size);
+}
+
+template <class... Words>
+static auto event(
+    ProtocolPeer& peer,
+    ProtocolPeer::Object object,
+    uint32_t opcode,
+    Words... words) -> void {
+  uint32_t packet[] = {
+    peer.objects[object],
+    uint32_t((sizeof...(Words) * 4 + 8) << 16) | opcode,
+    uint32_t(words)...,
+  };
+  send_packet(peer, packet, sizeof(packet));
+}
+
+static auto global(
+    ProtocolPeer& peer,
+    uint32_t name,
+    const char* interface,
+    uint32_t version) -> void {
+  uint32_t packet[32] = {};
+  size_t length = strlen(interface) + 1;
+  size_t words = (length + 3) / 4;
+  packet[0] = peer.objects[ProtocolPeer::Registry];
+  packet[1] = uint32_t((5 + words) * 4) << 16;
+  packet[2] = name;
+  packet[3] = uint32_t(length);
+  memcpy(packet + 4, interface, length);
+  packet[4 + words] = version;
+  send_packet(peer, packet, (5 + words) * 4);
+}
+
+static auto publish_input(ProtocolPeer& peer) -> void {
+  using P = ProtocolPeer;
+  if (peer.published || !peer.objects[P::Keyboard] ||
+      !peer.objects[P::Pointer] || !peer.objects[P::Surface] ||
+      !peer.objects[P::Toplevel]) {
+    return;
+  }
+  peer.published = true;
+  event(peer, P::Shell, 0, 77);
+  event(peer, P::Toplevel, 0, 400, 300, 0);
+  event(peer, P::XdgSurface, 0, 42);
+  event(peer, P::Surface, 2, 2);
+
+  // File descriptors travel as socket ancillary data rather than inline words.
+  // The read end reaches EOF only after the receiver releases its delivered FD.
+  uint32_t keymap[] = {peer.objects[P::Keyboard], 16u << 16, 1, 0};
+  iovec bytes = {keymap, sizeof(keymap)};
+  alignas(cmsghdr) char control[CMSG_SPACE(sizeof(int))] = {};
+  msghdr message = {};
+  message.msg_iov = &bytes;
+  message.msg_iovlen = 1;
+  message.msg_control = control;
+  message.msg_controllen = sizeof(control);
+  auto* descriptor = CMSG_FIRSTHDR(&message);
+  descriptor->cmsg_level = SOL_SOCKET;
+  descriptor->cmsg_type = SCM_RIGHTS;
+  descriptor->cmsg_len = CMSG_LEN(sizeof(int));
+  memcpy(CMSG_DATA(descriptor), &peer.keymap, sizeof(int));
+  peer.okay &= sendmsg(peer.socket, &message, MSG_NOSIGNAL) == sizeof(keymap);
+  close(peer.keymap);
+  peer.keymap = -1;
+
+  event(peer, P::Keyboard, 1, 101, peer.objects[P::Surface], 4, 30);
+  event(peer, P::Keyboard, 3, 102, 5, 48, 1);
+  event(peer, P::Pointer, 0, 103, peer.objects[P::Surface], 320, -640);
+  event(peer, P::Pointer, 2, 6, 2304, -1792);
+  event(peer, P::Pointer, 3, 104, 7, 272, 1);
+  event(peer, P::Pointer, 4, 8, 0, 768);
+  event(peer, P::Pointer, 5);
+}
+
+static auto serve(void* context) -> void* {
+  auto& peer = *static_cast<ProtocolPeer*>(context);
+  using P = ProtocolPeer;
+  uint32_t packet[128];
+  while (recv(peer.socket, packet, 8, MSG_WAITALL) == 8) {
+    size_t size = packet[1] >> 16;
+    if (size < 8 || size > sizeof(packet) ||
+        (size > 8 && recv(peer.socket, packet + 2, size - 8, MSG_WAITALL) !=
+                         ssize_t(size - 8))) {
+      peer.okay = false;
+      break;
+    }
+    uint32_t object = packet[0];
+    uint32_t opcode = packet[1] & 0xffff;
+    if (object == 1 && opcode == 1) {
+      peer.objects[P::Registry] = packet[2];
+      global(peer, 1, "wl_compositor", 6);
+      global(peer, 2, "xdg_wm_base", 1);
+      global(peer, 3, "wl_seat", 9);
+    } else if (object == 1 && opcode == 0) {
+      uint32_t done[] = {packet[2], 12u << 16, 1};
+      send_packet(peer, done, sizeof(done));
+      event(peer, P::Display, 1, packet[2]);
+    } else if (object == peer.objects[P::Registry] && opcode == 0) {
+      uint32_t id = packet[5 + (packet[3] + 3) / 4];
+      switch (packet[2]) {
+      case 1:
+        peer.objects[P::Compositor] = id;
+        break;
+      case 2:
+        peer.objects[P::Shell] = id;
+        break;
+      case 3:
+        peer.objects[P::Seat] = id;
+        event(peer, P::Seat, 0, 3);
+        break;
+      }
+    } else if (object == peer.objects[P::Compositor] && opcode == 0) {
+      peer.objects[P::Surface] = packet[2];
+    } else if (object == peer.objects[P::Shell] && opcode == 2) {
+      peer.objects[P::XdgSurface] = packet[2];
+    } else if (object == peer.objects[P::Shell] && opcode == 3) {
+      peer.pong = packet[2] == 77;
+    } else if (object == peer.objects[P::XdgSurface] && opcode == 1) {
+      peer.objects[P::Toplevel] = packet[2];
+    } else if (object == peer.objects[P::XdgSurface] && opcode == 4) {
+      peer.acknowledged = packet[2] == 42;
+    } else if (object == peer.objects[P::Surface] && opcode == 6) {
+      peer.committed |= peer.acknowledged;
+      if (peer.pong && peer.committed) {
+        __atomic_store_n(&peer.completed, true, __ATOMIC_RELEASE);
+      }
+    } else if (object == peer.objects[P::Seat] && opcode <= 1) {
+      peer.objects[opcode == 0 ? P::Pointer : P::Keyboard] = packet[2];
+    }
+    publish_input(peer);
+  }
+  shutdown(peer.socket, SHUT_RDWR);
+  return nullptr;
+}
+
+VALIDATION_TEST(WaylandDispatch, protocol_events) {
+  ProtocolPeer peer;
+  int sockets[2];
+  ASSERT(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+  peer.socket = sockets[1];
+  int pipe_fds[2];
+  ASSERT(pipe2(pipe_fds, O_NONBLOCK | O_CLOEXEC) == 0);
+  peer.keymap = pipe_fds[1];
+  timeval timeout = {2, 0};
+  setsockopt(peer.socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+  ASSERT(pthread_create(&peer.thread, nullptr, serve, &peer) == 0);
+  peer.started = true;
+
+  const char* previous = getenv("WAYLAND_SOCKET");
+  char* saved = previous ? strdup(previous) : nullptr;
+  char descriptor[32];
+  snprintf(descriptor, sizeof(descriptor), "%d", sockets[0]);
+  setenv("WAYLAND_SOCKET", descriptor, 1);
+  {
+    Window window(96, 64, "Private protocol check");
+    if (saved) {
+      setenv("WAYLAND_SOCKET", saved, 1);
+    } else {
+      unsetenv("WAYLAND_SOCKET");
+    }
+    free(saved);
+    using Key = Perimortem::System::Input::Key;
+    bool observed = false;
+    for (unsigned attempt = 0; attempt < 1000 && !observed; ++attempt) {
+      window.poll_events();
+      observed = window.get_input().get_pointer().scroll_y == 3;
+      if (!observed) {
+        usleep(1000);
+      }
+    }
+    EXPECT(observed);
+    EXPECT_EQ(window.get_logical_width(), 400u);
+    EXPECT_EQ(window.get_logical_height(), 300u);
+    EXPECT_EQ(window.get_scale(), 2u);
+    EXPECT(window.get_input().is_current(Key::A));
+    EXPECT(window.get_input().is_current(Key::B));
+    EXPECT(window.get_input().is_current(Key::MousePrimary));
+    EXPECT_EQ(window.get_input().get_pointer().x, 9.0f);
+    EXPECT_EQ(window.get_input().get_pointer().y, -7.0f);
+    char byte;
+    EXPECT(read(pipe_fds[0], &byte, 1) == 0);
+    close(pipe_fds[0]);
+
+    // Flush replies before checking peer counters. Completion is published
+    // after the acknowledgement and its following commit reach the peer.
+    window.poll_events();
+    for (unsigned attempt = 0;
+         attempt < 1000 && !__atomic_load_n(&peer.completed, __ATOMIC_ACQUIRE);
+         ++attempt) {
+      usleep(1000);
+    }
+    shutdown(peer.socket, SHUT_RD);
+    pthread_join(peer.thread, nullptr);
+    peer.started = false;
+    EXPECT(peer.okay);
+    EXPECT(peer.pong);
+    EXPECT(peer.acknowledged);
+    EXPECT(peer.committed);
+  }
+}
+
+#endif
