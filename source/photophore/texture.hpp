@@ -21,16 +21,16 @@ namespace Photophore {
 // these bindings before the image resources they refer to.
 class Texture {
  public:
-  static auto create(
+  static EXPORTED(PHOTOPHORE) auto create(
       const Context& context,
       const Photophore::Texture2D& resource,
       VkImageView image_view,
       VkDescriptorSetLayout descriptor_set_layout) -> Texture;
 
   Texture() = default;
-  ~Texture();
-  Texture(Texture&&) noexcept;
-  auto operator=(Texture&&) noexcept -> Texture&;
+  EXPORTED(PHOTOPHORE) ~Texture();
+  EXPORTED(PHOTOPHORE) Texture(Texture&&) noexcept;
+  EXPORTED(PHOTOPHORE) auto operator=(Texture&&) noexcept -> Texture&;
   Texture(const Texture&) = delete;
   auto operator=(const Texture&) = delete;
 

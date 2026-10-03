@@ -24,17 +24,18 @@ namespace Photophore {
 // reports Vulkan as unavailable through the same acquisition path.
 class Vulkan {
  public:
-  static auto acquire() -> Bool;
-  static auto release() -> void;
-  static auto symbol(Perimortem::Core::View::Bytes name) -> void*;
-  static auto surface_extension(Platform::Presentation::Kind kind) -> const
-      char*;
-  static auto create_surface(
+  static EXPORTED(PHOTOPHORE) auto acquire() -> Bool;
+  static EXPORTED(PHOTOPHORE) auto release() -> void;
+  static EXPORTED(PHOTOPHORE) auto symbol(Perimortem::Core::View::Bytes name)
+      -> void*;
+  static EXPORTED(PHOTOPHORE) auto surface_extension(
+      Platform::Presentation::Kind kind) -> const char*;
+  static EXPORTED(PHOTOPHORE) auto create_surface(
       VkInstance instance,
       Platform::Presentation presentation,
       VkSurfaceKHR* surface) -> VkResult;
 
-#define PHOTOPHORE_VULKAN(name) static PFN_##name name;
+#define PHOTOPHORE_VULKAN(name) static EXPORTED(PHOTOPHORE) PFN_##name name;
 #include "photophore/vulkan_functions.hpp"
 #undef PHOTOPHORE_VULKAN
 };

@@ -25,7 +25,7 @@ namespace Photophore {
 // completed before the pipeline is replaced or destroyed.
 class ShaderProgram {
  public:
-  static auto create(
+  static EXPORTED(PHOTOPHORE) auto create(
       VkDevice device,
       VkFormat color_format,
       const Description::Program& source,
@@ -34,28 +34,32 @@ class ShaderProgram {
           descriptor_set_layouts) -> ShaderProgram;
 
   ShaderProgram() = default;
-  ~ShaderProgram();
+  EXPORTED(PHOTOPHORE) ~ShaderProgram();
   // Moves exchange the owned pipeline and layout. Assignment leaves the old
   // destination resources with the donor, whose eventual destruction releases
   // them. Neither move ends the lifetime of either C++ owner.
-  ShaderProgram(ShaderProgram&&) noexcept;
+  EXPORTED(PHOTOPHORE) ShaderProgram(ShaderProgram&&) noexcept;
+  EXPORTED(PHOTOPHORE)
   auto operator=(ShaderProgram&&) noexcept -> ShaderProgram&;
   ShaderProgram(const ShaderProgram&) = delete;
   auto operator=(const ShaderProgram&) = delete;
 
-  auto bind(VkCommandBuffer command_buffer) const -> void;
+  EXPORTED(PHOTOPHORE) auto bind(VkCommandBuffer command_buffer) const -> void;
+  EXPORTED(PHOTOPHORE)
   auto bind_descriptor_set(
       VkCommandBuffer command_buffer,
       VkDescriptorSet descriptor_set,
       Count set = 0) const -> void;
+  EXPORTED(PHOTOPHORE)
   auto push_constants(
       VkCommandBuffer command_buffer,
       Perimortem::Core::View::Bytes source,
       Count range_index = 0) const -> void;
+  EXPORTED(PHOTOPHORE)
   auto draw(VkCommandBuffer command_buffer, Count vertex_count) const -> void;
 
-  auto get_layout() const -> VkPipelineLayout;
-  auto get_pipeline() const -> VkPipeline;
+  EXPORTED(PHOTOPHORE) auto get_layout() const -> VkPipelineLayout;
+  EXPORTED(PHOTOPHORE) auto get_pipeline() const -> VkPipeline;
 
  private:
   static constexpr Count max_push_constant_ranges = 8;

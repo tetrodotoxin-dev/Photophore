@@ -1,4 +1,4 @@
-load("@tetro_toolchain//:validation.bzl", "benchmark")
+load("@tetro_toolchain//:defs.bzl", "benchmarks")
 package(default_visibility = ["//visibility:public"])
 filegroup(name = "sources", srcs = glob(["**"]))
-benchmark(name = "run", srcs = glob(["**/*.cpp"]), deps = ["//:photophore"])
+benchmarks(name = "benchmarks", srcs = glob(["**/*.cpp"]), deps = ["//:photophore"])

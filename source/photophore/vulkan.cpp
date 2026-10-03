@@ -67,8 +67,9 @@ auto Vulkan::acquire() -> Bool {
     return False;
   }
   bool complete = true;
-#define PHOTOPHORE_VULKAN(name)                                                \
-  name = reinterpret_cast<PFN_##name>(symbol(NullTerminated::to_view(#name))); \
+#define PHOTOPHORE_VULKAN(name)                                   \
+  name = reinterpret_cast<PFN_##name>(                            \
+      symbol(NullTerminated::to_view(#name, sizeof(#name) - 1))); \
   complete = complete && name;
 #include "photophore/vulkan_functions.hpp"
 #undef PHOTOPHORE_VULKAN

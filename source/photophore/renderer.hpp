@@ -45,26 +45,27 @@ class Renderer {
     U32 image_index = 0;
   };
 
+  EXPORTED(PHOTOPHORE)
   Renderer(
       Photophore::Platform::Presentation presentation,
       U32 width,
       U32 height);
-  ~Renderer();
+  EXPORTED(PHOTOPHORE) ~Renderer();
   Renderer(const Renderer&) = delete;
   auto operator=(const Renderer&) -> Renderer& = delete;
 
   // Rebuilds the swapchain for a new physical extent and reports whether its
   // color format changed, which requires Pipelines to be rebuilt.
   // A zero extent suspends acquisition until the window becomes drawable.
-  auto resize(U32 width, U32 height) -> Bool;
-  auto begin_frame(Frame& frame) -> Bool;
-  auto end_frame(const Frame& frame) -> void;
-  auto wait_idle() -> void;
+  EXPORTED(PHOTOPHORE) auto resize(U32 width, U32 height) -> Bool;
+  EXPORTED(PHOTOPHORE) auto begin_frame(Frame& frame) -> Bool;
+  EXPORTED(PHOTOPHORE) auto end_frame(const Frame& frame) -> void;
+  EXPORTED(PHOTOPHORE) auto wait_idle() -> void;
 
-  auto get_width() const -> U32;
-  auto get_height() const -> U32;
-  auto get_context() const -> const Context&;
-  auto get_swapchain() const -> const Swapchain&;
+  EXPORTED(PHOTOPHORE) auto get_width() const -> U32;
+  EXPORTED(PHOTOPHORE) auto get_height() const -> U32;
+  EXPORTED(PHOTOPHORE) auto get_context() const -> const Context&;
+  EXPORTED(PHOTOPHORE) auto get_swapchain() const -> const Swapchain&;
 
  private:
   static constexpr Count frames_in_flight = 2;

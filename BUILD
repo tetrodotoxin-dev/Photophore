@@ -1,13 +1,27 @@
 # Copyright (c) 2023-present Matt Kaes and contributors
-load("@tetro_toolchain//:library.bzl", "shared_library")
+load("@tetro_toolchain//:defs.bzl", "package", "vscode")
 
-package(default_visibility = ["//visibility:public"])
-
-# Vulkan and windowing belong to this engine. Pixel storage and codecs stay
-# in Perimortem and carry no dependency on the rendering system.
-shared_library(
-    name = "photophore",
-    deps = ["@perimortem", "@vulkan_headers//:vulkan_headers", "@wayland"],
+# Vulkan and windowing belong to this engine. Pixel storage and codecs stay in
+# Perimortem and carry no dependency on the rendering system.
+package(
+    module = "photophore",
+    shared = "//source:photophore_shared",
+    static = "//source:photophore",
 )
 
-exports_files(["source/platform/wayland/sdk.BUILD"])
+alias(
+    name = "tests",
+    actual = "//tests:tests",
+)
+
+alias(
+    name = "benchmarks",
+    actual = "//benchmarks:benchmarks",
+)
+
+alias(
+    name = "demo",
+    actual = "//examples:demo",
+)
+
+vscode()

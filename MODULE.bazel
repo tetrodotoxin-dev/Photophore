@@ -6,26 +6,27 @@ module(
 bazel_dep(name = "rules_cc", version = "0.2.17")
 bazel_dep(name = "platforms", version = "1.0.0")
 bazel_dep(name = "rules_pkg", version = "1.3.0")
-bazel_dep(name = "tetro_toolchain", version = "0.2.0")
+bazel_dep(name = "tetro_toolchain", version = "0.3.0")
 archive_override(
     module_name = "tetro_toolchain",
-    sha256 = "83a4075e4fc96d53ca68319a6dd004d2f784ba8cd221f6c6a11126fb31e85085",
-    urls = ["https://github.com/tetrodotoxin-dev/Toolchain/releases/download/v0.2.0/tetro_toolchain-0.2.0-source.tar.gz"],
+    sha256 = "470c5cc73699ed8bfbe1ba53a2deee8ba407ec9ca80f078038bcd50d853004a4",
+    urls = ["https://github.com/tetrodotoxin-dev/Toolchain/releases/download/v0.3.0/tetro_toolchain-0.3.0-source.tar.gz"],
 )
 
 register_toolchains("@tetro_toolchain//:cc_toolchain_for_linux_x86_64", "@tetro_toolchain//:cc_toolchain_for_wasm32", "@tetro_toolchain//:cc_toolchain_for_windows_x64")
 
-sdks = use_extension("@tetro_toolchain//:sdk.bzl", "dependencies")
+sdks = use_extension("@tetro_toolchain//source/bazel:sdk.bzl", "dependencies")
 sdks.release(
     name = "perimortem",
     archives = {
-        "headers": "2bb19a82ceb2dd06a122fb51142e96fd13d52fd5ed323b8a662cb640082636ed",
-        "linux-x86_64-v3": "f62c3b71c9c5f554467c9dc03237073fc34d670fa596aa9cd99972dabfb2e653",
-        "windows-x86_64-msvc": "543763f2a684bc410e264f60115a13cc92b20ae12ae25a9c5294c685f9d06d94",
-        "wasm32-emscripten": "7c33f010c47932503f3ef8dcbddf3e4520a34b9e0bac70514a0cb38117400c42",
+        "headers": "5529f06dfd04ffb7e708cd3e681e4b804032d003cbb878b267f08bc080431598",
+        "linux-x86_64-v3-shared": "827d30ce74e7a37024a6afbf8ceef7cf727d444d6a4c9bd4b0b9aa9a6be3b1ba",
+        "windows-x86_64-msvc-shared": "ccd1938069536c7722495f4ae710ecc26248b571a7b98cc36c4ed592413e47f1",
+        "wasm32-emscripten-shared": "06ff9e16f8c82c4b5b782f0443a6623d5270791b3f7802af8744929955a92eb5",
     },
+    linkage = "shared",
     project = "Perimortem",
-    version = "0.1.0",
+    version = "0.3.0",
     deps = [],
 )
 use_repo(sdks, "perimortem")
@@ -34,7 +35,7 @@ bazel_dep(name = "vulkan_headers", version = "1.4.349")
 
 # The client SDK includes its generated headers and matching runtime libraries.
 # Wayland remains a private Linux dependency of the platform implementation.
-wayland_sdk = use_repo_rule("@tetro_toolchain//:sdk.bzl", "debian_sdk")
+wayland_sdk = use_repo_rule("@tetro_toolchain//source/bazel:sdk.bzl", "debian_sdk")
 wayland_sdk(
     name = "wayland",
     archives = {
@@ -42,5 +43,5 @@ wayland_sdk(
         "https://deb.debian.org/debian/pool/main/w/wayland/libwayland-client0_1.23.0-1~bpo12+1_amd64.deb": "0f00e0f00b8746d6a02fbe6c91708d290c26271883778c555569444f97028d9c",
         "https://deb.debian.org/debian/pool/main/libf/libffi/libffi8_3.4.4-1_amd64.deb": "6d9f6c25c30efccce6d4bceaa48ea86c329a3432abb360a141f76ac223a4c34a",
     },
-    build_file = "//:source/platform/wayland/sdk.BUILD",
+    build_file = "//source:photophore/platform/wayland/sdk.BUILD",
 )

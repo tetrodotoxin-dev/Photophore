@@ -19,14 +19,15 @@ class Transform {
  public:
   constexpr Transform() = default;
 
-  static auto create(
+  static EXPORTED(PHOTOPHORE) auto create(
       R64 translation_x,
       R64 translation_y,
       R64 scale_x,
       R64 scale_y,
       R64 rotation) -> Transform;
 
-  static auto compose(const Transform& parent, const Transform& local)
+  static EXPORTED(
+      PHOTOPHORE) auto compose(const Transform& parent, const Transform& local)
       -> Transform;
 
   constexpr auto get_xx() const -> R64 { return xx; }

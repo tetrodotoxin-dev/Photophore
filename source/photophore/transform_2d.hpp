@@ -3,7 +3,7 @@
 
 #pragma once
 
-#include "perimortem/graphics/point_2d.hpp"
+#include "perimortem/math/point.hpp"
 #include "photophore/frame/transform.hpp"
 
 namespace Photophore {
@@ -15,10 +15,10 @@ namespace Photophore {
 struct Transform2D {
   auto to_frame() const -> Frame::Transform {
     return Frame::Transform::create(
-        translation.x, translation.y, scale_x, scale_y, rotation);
+        translation[0], translation[1], scale_x, scale_y, rotation);
   }
 
-  Perimortem::Graphics::Point2D translation;
+  Perimortem::Math::Point<R64, 2> translation;
   R64 scale_x = 1.0;
   R64 scale_y = 1.0;
   R64 rotation = 0.0;
@@ -26,7 +26,7 @@ struct Transform2D {
 
 static_assert(
     sizeof(Transform2D) ==
-    sizeof(Perimortem::Graphics::Point2D) + sizeof(R64) * 3);
+    sizeof(Perimortem::Math::Point<R64, 2>) + sizeof(R64) * 3);
 static_assert(__is_standard_layout(Transform2D));
 
 }  // namespace Photophore

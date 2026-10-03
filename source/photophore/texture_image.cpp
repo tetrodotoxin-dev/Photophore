@@ -8,8 +8,8 @@
 #include "perimortem/core/diagnostics/log.hpp"
 #include "perimortem/core/null_terminated.hpp"
 
-#include "perimortem/graphics/image.hpp"
-#include "perimortem/graphics/pixel.hpp"
+#include "perimortem/serialization/rgba8.hpp"
+
 #include "photophore/vulkan.hpp"
 
 using namespace Photophore;
@@ -82,14 +82,16 @@ auto Photophore::TextureImage::create(
 
   BAIL_IF(!resource.is_drawable());
   const auto& source_image = resource.get_image();
-  Perimortem::Core::View::Vector<Perimortem::Graphics::Pixel> pixels =
-      source_image.get_pixels();
-  const U32 width = source_image.get_width();
-  const U32 height = source_image.get_height();
-  const VkDeviceSize image_size = VkDeviceSize(width) * height *
-                                  Perimortem::Graphics::Pixel::get_byte_count();
+  Perimortem::Core::View::Vector<Perimortem::Serialization::Rgba8> pixels =
+      source_image.get_values();
+  const U32 width = source_image.get_column_count();
+  const U32 height = source_image.get_row_count();
+  const VkDeviceSize image_size =
+      VkDeviceSize(width) * height *
+      Perimortem::Serialization::Rgba8::get_byte_count();
   if (width == 0 || height == 0 || resource.is_empty() ||
-      pixels.get_size() * sizeof(Perimortem::Graphics::Pixel) < image_size) {
+      pixels.get_size() * sizeof(Perimortem::Serialization::Rgba8) <
+          image_size) {
     return texture;
   }
 

@@ -12,8 +12,8 @@
 
 namespace Photophore {
 
-// TextureImage uploads a CPU Image into an sRGB Vulkan image and owns its
-// memory and view. Upload uses a temporary staging buffer and waits for the
+// TextureImage uploads a CPU pixel matrix into an sRGB Vulkan image and owns
+// its memory and view. Upload uses a temporary staging buffer and waits for the
 // queue before releasing it, so the source pixels are no longer borrowed when
 // create returns. The device must outlive this resource, and GPU reads must
 // have finished before destruction.
@@ -22,14 +22,14 @@ namespace Photophore {
 // Pipelines reuse one pixel allocation for several filters or addressing modes.
 class TextureImage {
  public:
-  static auto create(
+  static EXPORTED(PHOTOPHORE) auto create(
       const Context& context,
       const Photophore::Texture2D& resource) -> TextureImage;
 
   TextureImage() = default;
-  ~TextureImage();
-  TextureImage(TextureImage&&) noexcept;
-  auto operator=(TextureImage&&) noexcept -> TextureImage&;
+  EXPORTED(PHOTOPHORE) ~TextureImage();
+  EXPORTED(PHOTOPHORE) TextureImage(TextureImage&&) noexcept;
+  EXPORTED(PHOTOPHORE) auto operator=(TextureImage&&) noexcept -> TextureImage&;
   TextureImage(const TextureImage&) = delete;
   auto operator=(const TextureImage&) = delete;
 

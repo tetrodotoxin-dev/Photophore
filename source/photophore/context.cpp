@@ -50,7 +50,8 @@ static auto instance_layer_available(View::Bytes layer_name) -> Bool {
   return layers.get_view()
       .slice(0, read_layer_count)
       .contains([layer_name](const VkLayerProperties& layer) {
-        return NullTerminated::to_view(layer.layerName) == layer_name;
+        return NullTerminated::convert_cstring(
+                   layer.layerName, sizeof(layer.layerName)) == layer_name;
       });
 }
 #endif
@@ -83,8 +84,9 @@ static auto supports_extension(
     View::Vector<VkExtensionProperties> extensions,
     const char* name) -> Bool {
   return extensions.contains([name](const VkExtensionProperties& extension) {
-    return NullTerminated::to_view(extension.extensionName) ==
-           NullTerminated::to_view(name);
+    return NullTerminated::convert_cstring(
+               extension.extensionName, sizeof(extension.extensionName)) ==
+           NullTerminated::convert_cstring(name, VK_MAX_EXTENSION_NAME_SIZE);
   });
 }
 

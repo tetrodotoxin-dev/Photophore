@@ -13,21 +13,11 @@ auto Photophore::Sprite::set_texture(const Texture2D& texture) -> void {
   this->texture = texture;
 }
 
-auto Photophore::Sprite::get_material() const
-    -> const Perimortem::Core::Implementation& {
-  return material;
-}
-
-auto Photophore::Sprite::set_material(
-    const Perimortem::Core::Implementation& material) -> void {
-  this->material = material;
-}
-
-auto Photophore::Sprite::get_size() const -> Perimortem::Graphics::Size2D {
+auto Photophore::Sprite::get_size() const -> Perimortem::Math::Size<U32, 2> {
   return size;
 }
 
-auto Photophore::Sprite::set_size(Perimortem::Graphics::Size2D size) -> void {
+auto Photophore::Sprite::set_size(Perimortem::Math::Size<U32, 2> size) -> void {
   this->size = size;
 }
 
@@ -56,6 +46,5 @@ auto Photophore::Sprite::set_z_index(S64 z_index) -> void {
 }
 
 auto Photophore::Sprite::is_drawable() const -> Bool {
-  return visible && size.width != 0 && size.height != 0 &&
-         texture.is_drawable() && material.is_valid();
+  return visible && !size.is_empty() && texture.is_drawable();
 }

@@ -5,66 +5,16 @@
 
 #include "perimortem/core/data.hpp"
 #include "perimortem/core/diagnostics/log.hpp"
-#include "perimortem/core/math.hpp"
 #include "perimortem/core/null_terminated.hpp"
+#include "perimortem/core/scalar.hpp"
 
 #include "perimortem/memory/dynamic/bytes.hpp"
 
-#include "perimortem/graphics/image.hpp"
-#include "photophore/shader_program.hpp"
-#include "photophore/texture.hpp"
-#include "photophore/texture_image.hpp"
 #include "photophore/vulkan.hpp"
 
 using namespace Perimortem::Core;
 using namespace Photophore;
 using namespace Perimortem;
-
-struct PipelineImage {
-  Texture2D resource;
-  TextureImage image;
-  VkFence completion = VK_NULL_HANDLE;
-  const Count* generation = nullptr;
-  Count observed_generation = 0;
-};
-
-struct PipelineTexture {
-  Texture2D resource;
-  Texture texture;
-};
-
-struct PipelineProgram {
-  const Description::Program* description = nullptr;
-  Frame::Pipeline pipeline;
-  ShaderProgram shader;
-};
-
-static auto get_image_cache_entry(Object<> object) -> PipelineImage& {
-  return *Data::cast<PipelineImage>(object.get_payload());
-}
-static auto get_cache_entry(Object<> object) -> PipelineTexture& {
-  return *Data::cast<PipelineTexture>(object.get_payload());
-}
-static auto get_realization(Object<> object) -> PipelineProgram& {
-  return *Data::cast<PipelineProgram>(object.get_payload());
-}
-
-static const Object<>::Descriptor image_cache_descriptor(
-    sizeof(PipelineImage),
-    alignof(PipelineImage),
-    [](U8* payload) { Data::cast<PipelineImage>(payload)->~PipelineImage(); });
-static const Object<>::Descriptor cache_descriptor(
-    sizeof(PipelineTexture),
-    alignof(PipelineTexture),
-    [](U8* payload) {
-      Data::cast<PipelineTexture>(payload)->~PipelineTexture();
-    });
-static const Object<>::Descriptor realization_descriptor(
-    sizeof(PipelineProgram),
-    alignof(PipelineProgram),
-    [](U8* payload) {
-      Data::cast<PipelineProgram>(payload)->~PipelineProgram();
-    });
 
 struct UnitQuadVertex {
   R32 position[2];
@@ -233,11 +183,11 @@ static auto find_description(
 }
 
 static auto find_realization(
-    View::Vector<Object<>> realizations,
+    auto& realizations,
     const U8* locator,
-    Frame::Pipeline pipeline) -> PipelineProgram* {
-  for (Perimortem::Core::Object<> object : realizations) {
-    PipelineProgram& realization = get_realization(object);
+    Frame::Pipeline pipeline) -> decltype(&realizations[0]) {
+  for (Count index = 0; index < realizations.get_size(); index++) {
+    auto& realization = realizations[index];
     if (realization.description->locator == locator &&
         realization.pipeline == pipeline) {
       return &realization;
@@ -246,10 +196,10 @@ static auto find_realization(
   return nullptr;
 }
 
-static auto find_image(View::Vector<Object<>> images, const Texture2D& resource)
-    -> PipelineImage* {
-  for (Perimortem::Core::Object<> object : images) {
-    PipelineImage& entry = get_image_cache_entry(object);
+static auto find_image(auto& images, const Texture2D& resource)
+    -> decltype(&images[0]) {
+  for (Count index = 0; index < images.get_size(); index++) {
+    auto& entry = images[index];
     if (&entry.resource.get_image() == &resource.get_image()) {
       return &entry;
     }
@@ -258,11 +208,10 @@ static auto find_image(View::Vector<Object<>> images, const Texture2D& resource)
   return nullptr;
 }
 
-static auto find_texture(
-    View::Vector<Object<>> textures,
-    const Texture2D& resource) -> Texture* {
-  for (Perimortem::Core::Object<> object : textures) {
-    PipelineTexture& entry = get_cache_entry(object);
+static auto find_texture(auto& textures, const Texture2D& resource)
+    -> Texture* {
+  for (Count index = 0; index < textures.get_size(); index++) {
+    auto& entry = textures[index];
     if (entry.resource.matches(resource)) {
       return &entry.texture;
     }
@@ -276,12 +225,11 @@ static auto realize_pipeline(
     View::Vector<Description::Program> descriptions,
     VkFormat color_format,
     VkDescriptorSetLayout descriptor_layout,
-    Perimortem::Memory::Dynamic::Vector<Object<>>& realizations,
-    const Frame::Batch& batch) -> PipelineProgram* {
+    auto& realizations,
+    const Frame::Batch& batch) -> decltype(&realizations[0]) {
   const U8* locator = batch.get_program().get_locator();
   Photophore::Frame::Pipeline pipeline = batch.get_pipeline();
-  PipelineProgram* retained =
-      find_realization(realizations.get_view(), locator, pipeline);
+  auto* retained = find_realization(realizations, locator, pipeline);
   if (retained != nullptr) {
     return retained;
   }
@@ -298,72 +246,59 @@ static auto realize_pipeline(
   Count set_count = 0;
   for (const Description::DescriptorBinding& descriptor :
        description->descriptors) {
-    set_count = Perimortem::Core::Math::max(set_count, descriptor.set + 1);
+    set_count = Perimortem::Core::Scalar::max(set_count, descriptor.set + 1);
   }
   Perimortem::Memory::Dynamic::Vector<VkDescriptorSetLayout> layouts;
   for (Count set = 0; set < set_count; set++) {
     layouts.insert(descriptor_layout);
   }
 
-  Perimortem::Core::Object<> storage =
-      Perimortem::Core::Object<>::create(realization_descriptor);
-  new (storage.get_payload(), Perimortem::Core::Placement::Construct)
-      PipelineProgram();
-  PipelineProgram& realization = get_realization(storage);
+  Count index = realizations.get_size();
+  realizations.resize(index + 1);
+  auto& realization = realizations[index];
   realization.description = description;
   realization.pipeline = pipeline;
   realization.shader = ShaderProgram::create(
       context.get_device(), color_format, *description, pipeline,
       layouts.get_view());
-  realizations.emplace(static_cast<Perimortem::Core::Object<>&&>(storage));
-  return &get_realization(realizations[realizations.get_size() - 1]);
+  return &realization;
 }
 
 static auto realize_image(
     const Context& context,
-    Perimortem::Memory::Dynamic::Vector<Object<>>& images,
-    const Texture2D& resource) -> PipelineImage* {
-  PipelineImage* retained = find_image(images.get_view(), resource);
+    auto& images,
+    const Texture2D& resource) -> decltype(&images[0]) {
+  auto* retained = find_image(images, resource);
   if (retained) {
     return retained;
   }
 
-  Perimortem::Core::Object<> storage =
-      Perimortem::Core::Object<>::create(image_cache_descriptor);
-  new (storage.get_payload(), Perimortem::Core::Placement::Construct)
-      PipelineImage();
-  PipelineImage& entry = get_image_cache_entry(storage);
+  Count index = images.get_size();
+  images.resize(index + 1);
+  auto& entry = images[index];
   entry.resource = resource;
   entry.image = TextureImage::create(context, resource);
-  Perimortem::Core::Object<>& inserted =
-      images.emplace(static_cast<Perimortem::Core::Object<>&&>(storage));
-
-  return &get_image_cache_entry(inserted);
+  return &entry;
 }
 
 static auto realize_texture(
     const Context& context,
-    Perimortem::Memory::Dynamic::Vector<Object<>>& textures,
+    auto& textures,
     VkDescriptorSetLayout descriptor_layout,
     const Texture2D& resource,
     const TextureImage& image) -> Texture* {
-  Texture* retained = find_texture(textures.get_view(), resource);
+  Texture* retained = find_texture(textures, resource);
   if (retained) {
     return retained;
   }
 
-  Perimortem::Core::Object<> storage =
-      Perimortem::Core::Object<>::create(cache_descriptor);
-  new (storage.get_payload(), Perimortem::Core::Placement::Construct)
-      PipelineTexture();
-  PipelineTexture& entry = get_cache_entry(storage);
+  Count index = textures.get_size();
+  textures.resize(index + 1);
+  auto& entry = textures[index];
   entry.resource = resource;
   entry.texture =
       Texture::create(context, resource, image.get_view(), descriptor_layout);
-  Perimortem::Core::Object<>& inserted =
-      textures.emplace(static_cast<Perimortem::Core::Object<>&&>(storage));
-
-  return &get_cache_entry(inserted).texture;
+  return &entry.texture;
 }
 
 static auto validate(
@@ -385,8 +320,7 @@ static auto validate(
         batch.get_resources().get_size() !=
             description->descriptors.get_size() ||
         batch.get_inputs().get_size() != description->parameters_size ||
-        batch.get_size_pixels().width == 0 ||
-        batch.get_size_pixels().height == 0);
+        batch.get_size_pixels().is_empty());
     for (const Photophore::Texture2D& resource : batch.get_resources()) {
       BAIL_IF(!resource.is_drawable());
     }
@@ -430,13 +364,13 @@ static auto make_host_inputs(
     }
     R32 values[4] = {};
     if (field.role == Description::HostRole::TransformX) {
-      values[0] = R32(transform.get_xx() * size.width);
-      values[1] = R32(transform.get_xy() * size.height);
+      values[0] = R32(transform.get_xx() * size[0]);
+      values[1] = R32(transform.get_xy() * size[1]);
       values[2] = R32(transform.get_x());
       values[3] = R32(width);
     } else if (field.role == Description::HostRole::TransformY) {
-      values[0] = R32(transform.get_yx() * size.width);
-      values[1] = R32(transform.get_yy() * size.height);
+      values[0] = R32(transform.get_yx() * size[0]);
+      values[1] = R32(transform.get_yy() * size[1]);
       values[2] = R32(transform.get_y());
       values[3] = R32(height);
     }
@@ -445,21 +379,20 @@ static auto make_host_inputs(
   return inputs;
 }
 
-static auto sweep_textures(
-    const Context& context,
-    Perimortem::Memory::Dynamic::Vector<Object<>>& images,
-    Perimortem::Memory::Dynamic::Vector<Object<>>& textures) -> void {
+static auto sweep_textures(const Context& context, auto& images, auto& textures)
+    -> void {
   // CPU reservations identify images that no caller retains. The submission
   // fence adds the missing proof that earlier draws have finished reading the
   // GPU image and its sampled descriptors. Poll only retirement candidates,
   // leaving live resources and the rest of the queue running.
   Count index = 0;
   while (index < images.get_size()) {
-    PipelineImage& image = get_image_cache_entry(images[index]);
+    auto& image = images[index];
     const auto* identity = &image.resource.get_image();
     Count cached_reservations = 1;
-    for (Perimortem::Core::Object<> object : textures.get_view()) {
-      const PipelineTexture& texture = get_cache_entry(object);
+    for (Count texture_index = 0; texture_index < textures.get_size();
+         texture_index++) {
+      const auto& texture = textures[texture_index];
       cached_reservations += &texture.resource.get_image() == identity;
     }
     if (image.resource.get_reservations() != cached_reservations) {
@@ -487,16 +420,14 @@ static auto sweep_textures(
     // releasing that view and its device allocation.
     Count texture_index = 0;
     while (texture_index < textures.get_size()) {
-      const PipelineTexture& texture = get_cache_entry(textures[texture_index]);
+      const auto& texture = textures[texture_index];
       if (&texture.resource.get_image() != identity) {
         texture_index++;
         continue;
       }
 
-      textures[texture_index].release();
       textures.remove(texture_index);
     }
-    images[index].release();
     images.remove(index);
   }
 }
@@ -514,17 +445,8 @@ Photophore::Pipelines::Pipelines(
 
 Photophore::Pipelines::~Pipelines() {
   Vulkan::vkDeviceWaitIdle(context.get_device());
-  for (Perimortem::Core::Object<> texture : textures.get_view()) {
-    texture.release();
-  }
   textures.clear();
-  for (Perimortem::Core::Object<> image : images.get_view()) {
-    image.release();
-  }
   images.clear();
-  for (Perimortem::Core::Object<> realization : realizations.get_view()) {
-    realization.release();
-  }
   realizations.clear();
   destroy_vertex_buffer(context, vertex_buffer, vertex_memory);
   if (descriptor_layout) {
@@ -537,9 +459,6 @@ auto Photophore::Pipelines::rebuild(VkFormat color_format) -> void {
   // The caller finishes use of the old pipelines before rebuilding. Only
   // shader realizations depend on the attachment format, so uploaded images
   // and sampled descriptors remain reusable across this change.
-  for (Perimortem::Core::Object<> realization : realizations.get_view()) {
-    realization.release();
-  }
   realizations.clear();
   this->color_format = color_format;
 }
@@ -572,9 +491,8 @@ auto Photophore::Pipelines::record(
     }
   }
   for (const Photophore::Frame::Batch& batch : batches) {
-    PipelineProgram* realization = find_realization(
-        realizations.get_view(), batch.get_program().get_locator(),
-        batch.get_pipeline());
+    auto* realization = find_realization(
+        realizations, batch.get_program().get_locator(), batch.get_pipeline());
     BAIL_IF(realization == nullptr);
     Perimortem::Memory::Dynamic::Bytes inputs =
         make_host_inputs(*realization->description, batch, width, height);
@@ -587,8 +505,8 @@ auto Photophore::Pipelines::record(
          descriptor_index < realization->description->descriptors.get_size();
          descriptor_index++) {
       const auto& resource = batch.get_resources()[descriptor_index];
-      Texture* texture = find_texture(textures.get_view(), resource);
-      PipelineImage* image = find_image(images.get_view(), resource);
+      Texture* texture = find_texture(textures, resource);
+      auto* image = find_image(images, resource);
       BAIL_IF(image == nullptr);
       image->completion = frame.completion;
       image->generation = frame.completion_generation;

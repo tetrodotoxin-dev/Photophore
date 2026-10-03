@@ -25,28 +25,32 @@ namespace Photophore {
 // fatal diagnostic path.
 class Swapchain {
  public:
-  static auto create(const Context& ctx, U32 width, U32 height) -> Swapchain;
+  static EXPORTED(
+      PHOTOPHORE) auto create(const Context& ctx, U32 width, U32 height)
+      -> Swapchain;
 
   Swapchain() = default;
-  ~Swapchain();
-  Swapchain(Swapchain&&) noexcept;
-  auto operator=(Swapchain&&) noexcept -> Swapchain&;
+  EXPORTED(PHOTOPHORE) ~Swapchain();
+  EXPORTED(PHOTOPHORE) Swapchain(Swapchain&&) noexcept;
+  EXPORTED(PHOTOPHORE) auto operator=(Swapchain&&) noexcept -> Swapchain&;
   Swapchain(const Swapchain&) = delete;
   auto operator=(const Swapchain&) = delete;
 
   // Destroys and recreates the swapchain at the new physical pixel dimensions.
+  EXPORTED(PHOTOPHORE)
   auto recreate(const Context& ctx, U32 width, U32 height) -> void;
 
   // Acquires the next presentable image index. Blocks until one is available.
   // Returns UINT32_MAX on a resize signal (caller should recreate).
+  EXPORTED(PHOTOPHORE)
   auto acquire_next_image(VkSemaphore signal_semaphore) const -> U32;
 
-  auto get_swapchain() const -> VkSwapchainKHR;
-  auto get_extent() const -> VkExtent2D;
-  auto get_format() const -> VkFormat;
-  auto get_image(U32 index) const -> VkImage;
-  auto get_image_view(U32 index) const -> VkImageView;
-  auto get_image_count() const -> U32;
+  EXPORTED(PHOTOPHORE) auto get_swapchain() const -> VkSwapchainKHR;
+  EXPORTED(PHOTOPHORE) auto get_extent() const -> VkExtent2D;
+  EXPORTED(PHOTOPHORE) auto get_format() const -> VkFormat;
+  EXPORTED(PHOTOPHORE) auto get_image(U32 index) const -> VkImage;
+  EXPORTED(PHOTOPHORE) auto get_image_view(U32 index) const -> VkImageView;
+  EXPORTED(PHOTOPHORE) auto get_image_count() const -> U32;
 
   static constexpr U32 max_images = 8;
 

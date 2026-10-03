@@ -1,16 +1,14 @@
 # # Tetrodotoxin
 # Copyright (c) 2023-present Matt Kaes and contributors
 
-load("@tetro_toolchain//:validation.bzl", "test")
 load("@rules_cc//cc:cc_test.bzl", "cc_test")
+load("@tetro_toolchain//:defs.bzl", "tests")
 
 package(default_visibility = ["//visibility:public"])
 filegroup(name = "sources", srcs = glob(["**"]))
 
-test(
-    name = "test",
-    size = "small",
-    testonly = True,
+tests(
+    name = "tests",
     srcs = glob(["**/*.cpp"], exclude = ["presentation.cpp"]),
     deps = [
         "//:photophore",

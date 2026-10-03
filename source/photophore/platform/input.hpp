@@ -25,20 +25,21 @@ class Input {
   using Key = Perimortem::System::Input::Key;
   constexpr Input() = default;
 
-  auto set_key(Key key, Bool down) -> void;
-  auto clear_keyboard() -> void;
-  auto clear_pointer() -> void;
-  auto set_pointer(R32 x, R32 y) -> void;
-  auto scroll(R32 x, R32 y) -> void;
+  EXPORTED(PHOTOPHORE) auto set_key(Key key, Bool down) -> void;
+  EXPORTED(PHOTOPHORE) auto clear_keyboard() -> void;
+  EXPORTED(PHOTOPHORE) auto clear_pointer() -> void;
+  EXPORTED(PHOTOPHORE) auto set_pointer(R32 x, R32 y) -> void;
+  EXPORTED(PHOTOPHORE) auto scroll(R32 x, R32 y) -> void;
   constexpr auto is_pointer_active() const -> Bool { return pointer_focused; }
+  EXPORTED(PHOTOPHORE)
   auto collect(const Perimortem::System::Input::Mapping& mapping)
       -> Perimortem::System::Input;
 
   // Codes belong to the selected host's physical keyboard and button space.
   // Text interpretation follows the user's layout and belongs to a separate
   // service, so changing keyboard layouts cannot rearrange game controls.
-  static auto translate_keyboard(U32 code) -> Key;
-  static auto translate_button(U32 code) -> Key;
+  static EXPORTED(PHOTOPHORE) auto translate_keyboard(U32 code) -> Key;
+  static EXPORTED(PHOTOPHORE) auto translate_button(U32 code) -> Key;
 
  private:
   static constexpr Count word_bits = sizeof(U64) * 8;

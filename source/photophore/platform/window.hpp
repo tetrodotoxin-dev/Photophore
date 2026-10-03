@@ -34,29 +34,33 @@ class Window {
   };
 
   Window() = default;
-  Window(U32 width, U32 height, const char* title);
-  ~Window();
+  EXPORTED(PHOTOPHORE) Window(U32 width, U32 height, const char* title);
+  EXPORTED(PHOTOPHORE) ~Window();
   Window(Window&&) = delete;
   auto operator=(Window&&) -> Window& = delete;
   Window(const Window&) = delete;
   auto operator=(const Window&) -> Window& = delete;
 
-  auto poll_events() -> EventStatus;
-  auto get_event_status() const -> EventStatus;
+  EXPORTED(PHOTOPHORE) auto poll_events() -> EventStatus;
+  EXPORTED(PHOTOPHORE) auto get_event_status() const -> EventStatus;
 
-  auto get_logical_width() const -> U32;
-  auto get_logical_height() const -> U32;
-  auto get_scale() const -> U32;
-  auto get_needs_resize() const -> Bool;
-  auto clear_resize() -> void;
+  EXPORTED(PHOTOPHORE) auto get_logical_width() const -> U32;
+  EXPORTED(PHOTOPHORE) auto get_logical_height() const -> U32;
+  EXPORTED(PHOTOPHORE) auto get_scale() const -> U32;
+  EXPORTED(PHOTOPHORE) auto get_needs_resize() const -> Bool;
+  EXPORTED(PHOTOPHORE) auto clear_resize() -> void;
 
   // A completed event poll replaces the stored snapshot. get_input borrows
   // that value until the next poll, while copying it preserves an observation.
   // Mapping changes take effect when the next snapshot is collected.
+  EXPORTED(PHOTOPHORE)
   auto get_input() const -> const Perimortem::System::Input&;
+  EXPORTED(PHOTOPHORE)
   auto get_input_mapping() -> Perimortem::System::Input::Mapping&;
+  EXPORTED(PHOTOPHORE)
   auto get_input_mapping() const -> const Perimortem::System::Input::Mapping&;
 
+  EXPORTED(PHOTOPHORE)
   auto get_presentation() const -> Photophore::Platform::Presentation;
 
  private:

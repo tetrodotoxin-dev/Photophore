@@ -4,8 +4,8 @@
 #include "photophore/swapchain.hpp"
 
 #include "perimortem/core/diagnostics/log.hpp"
-#include "perimortem/core/math.hpp"
 #include "perimortem/core/null_terminated.hpp"
+#include "perimortem/core/scalar.hpp"
 
 #include "perimortem/memory/dynamic/vector.hpp"
 
@@ -132,10 +132,10 @@ static auto build(
   if (surface_capabilities.currentExtent.width != UINT32_MAX) {
     swapchain_state.extent = surface_capabilities.currentExtent;
   } else {
-    swapchain_state.extent.width = Math::clamp(
+    swapchain_state.extent.width = Scalar::clamp(
         width, surface_capabilities.minImageExtent.width,
         surface_capabilities.maxImageExtent.width);
-    swapchain_state.extent.height = Math::clamp(
+    swapchain_state.extent.height = Scalar::clamp(
         height, surface_capabilities.minImageExtent.height,
         surface_capabilities.maxImageExtent.height);
   }

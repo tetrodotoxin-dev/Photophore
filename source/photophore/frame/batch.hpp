@@ -9,7 +9,7 @@
 #include "perimortem/memory/dynamic/bytes.hpp"
 #include "perimortem/memory/dynamic/vector.hpp"
 
-#include "perimortem/graphics/size_2d.hpp"
+#include "perimortem/math/size.hpp"
 #include "photophore/frame/pipeline.hpp"
 #include "photophore/frame/program.hpp"
 #include "photophore/frame/transform.hpp"
@@ -18,8 +18,8 @@
 namespace Photophore::Frame {
 
 // Batch captures one draw's values while its source objects are available.
-// It owns the parameter bytes and retains each Texture2D's shared Image, so
-// later changes to source placement or resource selection cannot rewrite the
+// It owns the parameter bytes and retains each Texture2D's shared pixel matrix,
+// so later changes to source placement or resource selection cannot rewrite the
 // captured values. Its Program locator still borrows a stable identity token.
 //
 // The comparison orders batches by z_index and then authored_order, allowing
@@ -30,12 +30,13 @@ class Batch {
  public:
   Batch() = default;
 
+  EXPORTED(PHOTOPHORE)
   Batch(
       Program program,
       Perimortem::Memory::Dynamic::Vector<Texture2D>&& resources,
       Perimortem::Memory::Dynamic::Bytes&& inputs,
       Transform transform,
-      Perimortem::Graphics::Size2D size_pixels,
+      Perimortem::Math::Size<U32, 2> size_pixels,
       Pipeline pipeline,
       Count vertex_count,
       S64 z_index,
@@ -46,9 +47,9 @@ class Batch {
       -> Perimortem::Core::View::Vector<Texture2D> {
     return resources.get_view();
   }
-  auto get_inputs() const -> Perimortem::Core::View::Bytes;
+  EXPORTED(PHOTOPHORE) auto get_inputs() const -> Perimortem::Core::View::Bytes;
   constexpr auto get_transform() const -> const Transform& { return transform; }
-  constexpr auto get_size_pixels() const -> Perimortem::Graphics::Size2D {
+  constexpr auto get_size_pixels() const -> Perimortem::Math::Size<U32, 2> {
     return size_pixels;
   }
   constexpr auto get_pipeline() const -> Pipeline { return pipeline; }
@@ -65,7 +66,7 @@ class Batch {
   Perimortem::Memory::Dynamic::Vector<Texture2D> resources;
   Perimortem::Memory::Dynamic::Bytes inputs;
   Transform transform;
-  Perimortem::Graphics::Size2D size_pixels;
+  Perimortem::Math::Size<U32, 2> size_pixels;
   Pipeline pipeline;
   Count vertex_count = 0;
   S64 z_index = 0;

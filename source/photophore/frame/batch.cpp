@@ -3,6 +3,8 @@
 
 #include "photophore/frame/batch.hpp"
 
+#include "perimortem/core/data.hpp"
+
 using namespace Perimortem;
 
 Photophore::Frame::Batch::Batch(
@@ -10,16 +12,14 @@ Photophore::Frame::Batch::Batch(
     Perimortem::Memory::Dynamic::Vector<Texture2D>&& resources,
     Perimortem::Memory::Dynamic::Bytes&& inputs,
     Transform transform,
-    Perimortem::Graphics::Size2D size_pixels,
+    Perimortem::Math::Size<U32, 2> size_pixels,
     Pipeline pipeline,
     Count vertex_count,
     S64 z_index,
     Count authored_order)
     : program(program),
-      resources(
-          static_cast<Perimortem::Memory::Dynamic::Vector<Texture2D>&&>(
-              resources)),
-      inputs(static_cast<Perimortem::Memory::Dynamic::Bytes&&>(inputs)),
+      resources(Perimortem::Core::Data::take(resources)),
+      inputs(Perimortem::Core::Data::take(inputs)),
       transform(transform),
       size_pixels(size_pixels),
       pipeline(pipeline),
