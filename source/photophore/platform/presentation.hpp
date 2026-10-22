@@ -7,15 +7,15 @@
 
 namespace Photophore::Platform {
 
-// A Vulkan surface needs native handles, but renderer callers do not need to
-// include every window system's headers. Presentation carries the host tag and
-// two borrowed handles to the selected surface implementation. Wayland uses a
-// wl_display and wl_surface, while Win32 uses an HINSTANCE and HWND.
+// Presentation is the borrowed native surface input consumed by Context. Kind
+// selects the matching platform implementation, while host and surface carry
+// its two native handles. Wayland supplies wl_display and wl_surface. Win32
+// supplies HINSTANCE and HWND. This common record keeps those platform headers
+// outside application facing rendering interfaces.
 //
-// Copying this record does not retain either handle. Its Window must outlive
-// the Vulkan surface made from it. Kind::None represents an unavailable
-// presenter, and each host adapter accepts only the kind it knows how to
-// interpret.
+// Window supplies the lifetime of both handles and remains live through the
+// Vulkan surface created from them. Copies preserve the same borrowed handles.
+// Kind::None represents an unavailable presentation path.
 class Presentation {
  public:
   enum class Kind : U64 {

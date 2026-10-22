@@ -10,9 +10,11 @@
 
 namespace Photophore::Description {
 
-// A borrowed SPIR V module selected for one Vulkan pipeline stage. Keeping the
-// compiled module as 32 bit words preserves its alignment and supplies one
-// unambiguous byte count. An empty entry name selects `main`.
+// Module lends one SPIR V binary and its shader stage to ShaderProgram. U32
+// words preserve the alignment required by Vulkan and give module creation an
+// exact byte extent. entry names the exported shader function, with an empty
+// view selecting `main`. The Program inventory supplies both borrowed
+// lifetimes.
 struct Module {
   Stage stage = Stage::Vertex;
   Perimortem::Core::View::Vector<U32> words;

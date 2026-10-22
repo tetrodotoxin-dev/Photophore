@@ -18,5 +18,5 @@ cc_binary(
         "program.hpp",
     ],
     data = glob(["shaders/*.glsl"]),
-    deps = ["//:photophore"],
+    deps = ["//:vulkan"],
 )

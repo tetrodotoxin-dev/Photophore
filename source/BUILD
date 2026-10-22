@@ -9,8 +9,6 @@ filegroup(
     srcs = glob(["**"]),
 )
 
-exports_files(["photophore/platform/wayland/sdk.BUILD"])
-
 _LIBRARY = dict(
     srcs = glob(["photophore/**/*.cpp"]),
     hdrs = glob(
@@ -20,6 +18,7 @@ _LIBRARY = dict(
         ],
         allow_empty = True,
     ),
+    implementation_deps = ["//source/implementation:headers"],
     includes = ["."],
     deps = [
         "@perimortem//:core",
@@ -27,29 +26,46 @@ _LIBRARY = dict(
         "@perimortem//:memory",
         "@perimortem//:serialization",
         "@perimortem//:system",
-        "@vulkan_headers//:vulkan_headers",
+        "@vulkan_headers",
     ],
-    implementation_deps = ["@wayland"],
 )
+
+_COMPONENTS = {
+    "description": [],
+    "image": [],
+    "platform": [],
+    "frame": ["image"],
+    "scene": [
+        "frame",
+        "image",
+    ],
+    "vulkan": [
+        "description",
+        "frame",
+        "image",
+        "platform",
+    ],
+}
 
 library(
     srcs = _LIBRARY["srcs"],
     hdrs = _LIBRARY["hdrs"],
+    components = _COMPONENTS,
+    implementation_deps = _LIBRARY["implementation_deps"],
     includes = _LIBRARY["includes"],
     deps = _LIBRARY["deps"],
-    implementation_deps = _LIBRARY["implementation_deps"],
 )
 
 library(
     name = "photophore_shared",
     srcs = _LIBRARY["srcs"],
     hdrs = _LIBRARY["hdrs"],
-    includes = _LIBRARY["includes"],
-    deps = _LIBRARY["deps"],
     implementation_deps = _LIBRARY["implementation_deps"],
+    includes = _LIBRARY["includes"],
     linkage = "shared",
     shared_lib_name = select({
         WINDOWS: "photophore.dll",
         "//conditions:default": "libphotophore.so",
     }),
+    deps = _LIBRARY["deps"],
 )

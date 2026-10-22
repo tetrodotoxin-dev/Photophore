@@ -19,7 +19,7 @@ void main() {
       dot(draw.transform_y.xy, position) + draw.transform_y.z);
   vec2 clip = vec2(
       pixel.x / draw.transform_x.w * 2.0 - 1.0,
-      1.0 - pixel.y / draw.transform_y.w * 2.0);
+      pixel.y / draw.transform_y.w * 2.0 - 1.0);
   gl_Position = vec4(clip, 0.0, 1.0);
   texture_uv = texture_coordinate;
 }

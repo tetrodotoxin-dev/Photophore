@@ -9,17 +9,15 @@
 
 namespace Photophore::Platform {
 
-// A frame may observe input less often than the host delivers events. Input
-// keeps the physical control state between observations, then maps both the
-// current and previous state with the same application mapping. Remapping a
-// held key therefore does not manufacture a press merely because its name
-// changed. A press and release entirely between observations is not queued.
+// Input accumulates physical keyboard, pointer button, motion and scroll events
+// between application observations. collect maps both the current and previous
+// physical states with the same application Mapping, so remapping a held key
+// preserves its transition history under the newly selected name.
 //
 // collect returns a value snapshot and advances the comparison point. Scroll
-// is accumulated until that call, while pointer motion is measured from the
-// previous observation. Leaving and reentering the surface resets that motion
-// baseline so positions from different focus intervals do not become a jump.
-// Each Window owns one accumulator, used on its event thread.
+// accumulates through that call, while pointer motion measures the distance
+// from the previous focused observation. A focus change starts a fresh motion
+// baseline. Each Window contains one Input and uses it on the window thread.
 class Input {
  public:
   using Key = Perimortem::System::Input::Key;
@@ -35,9 +33,9 @@ class Input {
   auto collect(const Perimortem::System::Input::Mapping& mapping)
       -> Perimortem::System::Input;
 
-  // Codes belong to the selected host's physical keyboard and button space.
-  // Text interpretation follows the user's layout and belongs to a separate
-  // service, so changing keyboard layouts cannot rearrange game controls.
+  // Translation maps the selected host's physical keyboard and button codes
+  // into stable game controls. Text entry remains a separate interpretation of
+  // the user's keyboard layout.
   static EXPORTED(PHOTOPHORE) auto translate_keyboard(U32 code) -> Key;
   static EXPORTED(PHOTOPHORE) auto translate_button(U32 code) -> Key;
 

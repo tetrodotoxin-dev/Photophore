@@ -32,16 +32,3 @@ sdks.release(
 use_repo(sdks, "perimortem")
 
 bazel_dep(name = "vulkan_headers", version = "1.4.349")
-
-# The client SDK includes its generated headers and matching runtime libraries.
-# Wayland remains a private Linux dependency of the platform implementation.
-wayland_sdk = use_repo_rule("@tetro_toolchain//source/bazel:sdk.bzl", "debian_sdk")
-wayland_sdk(
-    name = "wayland",
-    archives = {
-        "https://deb.debian.org/debian/pool/main/w/wayland/libwayland-dev_1.23.0-1~bpo12+1_amd64.deb": "277cb77a121cdd485b63a9dd782322115762554295f1ba88551efcc950c88a27",
-        "https://deb.debian.org/debian/pool/main/w/wayland/libwayland-client0_1.23.0-1~bpo12+1_amd64.deb": "0f00e0f00b8746d6a02fbe6c91708d290c26271883778c555569444f97028d9c",
-        "https://deb.debian.org/debian/pool/main/libf/libffi/libffi8_3.4.4-1_amd64.deb": "6d9f6c25c30efccce6d4bceaa48ea86c329a3432abb360a141f76ac223a4c34a",
-    },
-    build_file = "//source:photophore/platform/wayland/sdk.BUILD",
-)

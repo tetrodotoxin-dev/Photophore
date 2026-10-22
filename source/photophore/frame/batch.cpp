@@ -5,11 +5,12 @@
 
 #include "perimortem/core/data.hpp"
 
-using namespace Perimortem;
-
+// Construction captures one draw observation. Moving resources and parameter
+// bytes makes their lifetime exactly the Batch lifetime while placement and
+// ordering remain inexpensive copied values.
 Photophore::Frame::Batch::Batch(
     Program program,
-    Perimortem::Memory::Dynamic::Vector<Texture2D>&& resources,
+    Perimortem::Memory::Dynamic::Vector<Image::Texture2D>&& resources,
     Perimortem::Memory::Dynamic::Bytes&& inputs,
     Transform transform,
     Perimortem::Math::Size<U32, 2> size_pixels,

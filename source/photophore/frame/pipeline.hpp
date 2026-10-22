@@ -7,10 +7,10 @@
 
 namespace Photophore::Frame {
 
-// A compiled Program can be drawn with different fixed state. Pipeline keeps
-// that selection beside the batch so Pipelines can key each Vulkan realization
-// by both the program locator and this value. The current choices describe a
-// unit quad drawn as a triangle list with alpha blending.
+// Pipeline is the fixed draw state paired with a Frame::Program. Pipelines keys
+// each VkPipeline by both values, keeping compiled shader identity and fixed
+// draw state independently selectable. The current profile is a unit quad
+// rendered as a triangle list with source alpha blending.
 class Pipeline {
  public:
   enum class Topology : U8 {

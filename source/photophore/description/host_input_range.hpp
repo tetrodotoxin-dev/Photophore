@@ -9,11 +9,11 @@
 
 namespace Photophore::Description {
 
-// A shader stage can read only the push constant ranges declared by its
-// pipeline layout. This record supplies a byte offset, size and borrowed stage
-// list for that declaration. Vulkan requires nonzero size and four byte units.
-// Parameter values arrive later through command recording, independently of
-// these layout records.
+// HostInputRange declares the portion of Program's host block visible to a set
+// of shader stages. ShaderProgram copies offset, size and stages into one
+// Vulkan push constant range, preserving the compiled agreement when commands
+// later supply bytes for a draw. Vulkan measures both offset and size in four
+// byte units and requires a positive size.
 struct HostInputRange {
   Count offset = 0;
   Count size = 0;

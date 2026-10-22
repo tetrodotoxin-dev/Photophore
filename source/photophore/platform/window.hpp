@@ -8,10 +8,11 @@
 
 namespace Photophore::Platform {
 
-// Window owns a native toplevel and the event state needed to observe it. The
-// host implementations supply creation, polling and destruction in their own
-// files, while application code uses the same Window and Input operations.
-// A failed creation remains destructible and reports EventStatus::Failed.
+// Window owns one native toplevel, its connection and the Input accumulator
+// filled by host callbacks. Its implementation keeps one creation, polling,
+// surface publication and destruction model, with target branches providing
+// the available native operations. EventStatus reports ready, ordinary close
+// and platform failure as distinct outcomes.
 //
 // Dimensions and pointer positions share client coordinates. Multiplying by
 // scale gives framebuffer dimensions. Wayland supplies an integer buffer scale,
@@ -19,13 +20,13 @@ namespace Photophore::Platform {
 // change sets needs_resize until the caller has handled it and calls
 // clear_resize.
 //
-// The native callbacks retain this object's address. Create, poll and destroy
-// it on the same thread, and keep it in place while those callbacks exist.
-// Presentation borrows its handles, so destroy the renderer's Vulkan surface
-// before destroying the Window.
+// Native callbacks retain the Window address, establishing one immovable value
+// used by a single thread through creation, polling and destruction.
+// Presentation lends its handles to Context, so Renderer and its Vulkan surface
+// end before Window destruction.
 class Window {
  public:
-  // EventStatus keeps an ordinary compositor close separate from a host
+  // EventStatus keeps an ordinary compositor close separate from a platform
   // failure so an application can preserve its process outcome.
   enum class EventStatus : U8 {
     Ready,
@@ -50,9 +51,9 @@ class Window {
   EXPORTED(PHOTOPHORE) auto get_needs_resize() const -> Bool;
   EXPORTED(PHOTOPHORE) auto clear_resize() -> void;
 
-  // A completed event poll replaces the stored snapshot. get_input borrows
-  // that value until the next poll, while copying it preserves an observation.
-  // Mapping changes take effect when the next snapshot is collected.
+  // A completed poll replaces the stored Input snapshot. get_input borrows it
+  // through the next poll, while copying it preserves that observation. Mapping
+  // changes apply when the next snapshot is collected.
   EXPORTED(PHOTOPHORE)
   auto get_input() const -> const Perimortem::System::Input&;
   EXPORTED(PHOTOPHORE)

@@ -7,10 +7,10 @@
 
 namespace Photophore::Description {
 
-// Resource selects the descriptor representation required by the compiled
-// shader. The current renderer realizes SampledTexture2D as a combined image
-// sampler. Additional resource kinds need a corresponding realization before
-// Pipelines can accept descriptions that use them.
+// Resource names the Vulkan descriptor representation required by a compiled
+// shader. SampledTexture2D selects a combined image and sampler sourced from a
+// Frame::Batch Texture2D. Each enumerator pairs with one concrete
+// Pipelines realization and its validation rules.
 enum class Resource : U8 {
   SampledTexture2D,
 };

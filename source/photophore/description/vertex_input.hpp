@@ -7,11 +7,11 @@
 
 namespace Photophore::Description {
 
-// Each entry identifies an R32 scalar or vector in one interleaved vertex
-// buffer. location is the shader input location, offset is measured from the
-// vertex start, and stride is shared by all entries on binding zero.
-// ShaderProgram accepts one through four components. Pipelines further checks
-// that this layout matches the unit quad buffer it supplies.
+// VertexInput describes one R32 scalar or vector in an interleaved vertex
+// record. location selects the shader input, offset measures bytes from the
+// record start, and every entry shares the stride of binding zero.
+// ShaderProgram maps one through four components to Vulkan formats. Pipelines
+// admits the two entries matching its position and texture coordinate quad.
 struct VertexInput {
   Count location = 0;
   Count components = 0;

@@ -7,11 +7,13 @@
 
 namespace Photophore::Frame {
 
-// A batch selects a compiled program by an opaque address token. Pipelines
-// compares this token with its Description::Program inventory and never reads
-// the pointed byte. The producer keeps the identity stable for the lifetime of
-// all batches and inventories that use it. This value neither owns the program
-// nor establishes agreement between independently loaded modules.
+// Program carries the address identity of one Description::Program into a
+// Frame::Batch. Pipelines compares that token with its borrowed inventory and
+// uses the matching description to realize the draw. The caller keeps the
+// locator stable for every inventory and batch that shares it.
+//
+// The pointed byte serves only as identity. Description admission establishes
+// the shader and layout agreement associated with that address.
 class Program {
  public:
   constexpr Program() = default;

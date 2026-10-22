@@ -7,11 +7,10 @@
 
 namespace Photophore::Description {
 
-// Host roles distinguish bytes copied from a batch from values supplied by
-// its current placement. TransformX and TransformY each hold one affine row
-// scaled by the quad size, followed by its translation and framebuffer extent.
-// That four R32 convention lets shaders map unit geometry into the current
-// view.
+// HostRole selects how Pipelines fills one HostField. Parameter copies authored
+// bytes from Frame::Batch. TransformX and TransformY each publish one affine
+// row scaled by the quad size, followed by translation and framebuffer extent.
+// Those four R32 values map unit geometry into the current presentation area.
 enum class HostRole : U8 {
   Parameter,
   TransformX,

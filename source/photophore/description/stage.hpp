@@ -7,8 +7,9 @@
 
 namespace Photophore::Description {
 
-// Identifies the Vulkan pipeline stage that consumes a module or host input
-// range. Conversion to native flags remains local to pipeline construction.
+// Stage identifies where a Module executes and which shaders can observe a
+// HostInputRange. ShaderProgram performs the Vulkan flag conversion while this
+// description stays independent of native numeric values.
 enum class Stage : U32 {
   Vertex,
   Pixel,

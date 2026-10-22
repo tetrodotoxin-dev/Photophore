@@ -7,7 +7,6 @@
 #include "perimortem/core/null_terminated.hpp"
 
 using namespace Perimortem::Core;
-using namespace Photophore;
 
 // These modules are optimized Vulkan 1.3 SPIR V compiled from the neighboring
 // GLSL sources. Embedding the validated words keeps the executable independent
@@ -67,8 +66,8 @@ alignas(U32) static constexpr U32 vertex_module[] = {
   393281u,    26u,         56u,     13u,         30u,         45u,
   262205u,    6u,          57u,     56u,         327816u,     6u,
   58u,        38u,         57u,     327813u,     6u,          59u,
-  58u,        49u,         327811u, 6u,          60u,         51u,
-  59u,        458832u,     10u,     70u,         52u,         60u,
+  58u,        49u,         327811u, 6u,          60u,         59u,
+  51u,        458832u,     10u,     70u,         52u,         60u,
   67u,        51u,         327745u, 71u,         72u,         65u,
   15u,        196670u,     72u,     70u,         262205u,     7u,
   76u,        75u,         196670u, 74u,         76u,         65789u,
@@ -125,77 +124,87 @@ alignas(U32) static constexpr U32 fragment_module[] = {
 
 static constexpr U8 program_locator = 0;
 
-static constexpr Description::Stage input_stages[] = {
-  Description::Stage::Vertex,
-  Description::Stage::Pixel,
+// Vertex placement and pixel tone share one push range, demonstrating a host
+// input contract consumed by multiple shader stages.
+static constexpr Photophore::Description::Stage input_stages[] = {
+  Photophore::Description::Stage::Vertex,
+  Photophore::Description::Stage::Pixel,
 };
 
-static const Description::Module modules[] = {
+static const Photophore::Description::Module modules[] = {
   {
-    Description::Stage::Vertex,
+    Photophore::Description::Stage::Vertex,
     View::Vector<U32>(vertex_module, Data::array_size(vertex_module)),
     {},
   },
   {
-    Description::Stage::Pixel,
+    Photophore::Description::Stage::Pixel,
     View::Vector<U32>(fragment_module, Data::array_size(fragment_module)),
     {},
   },
 };
 
-static const Description::HostInputRange host_input_ranges[] = {
+static const Photophore::Description::HostInputRange host_input_ranges[] = {
   {
     0,
     sizeof(R32) * 12,
-    View::Vector<Description::Stage>(
+    View::Vector<Photophore::Description::Stage>(
         input_stages,
         Data::array_size(input_stages)),
   },
 };
 
-static const Description::DescriptorBinding descriptors[] = {
-  {"image"_view, 0, 0, Description::Resource::SampledTexture2D},
-  {"overlay"_view, 1, 0, Description::Resource::SampledTexture2D},
+static const Photophore::Description::DescriptorBinding descriptors[] = {
+  // Distinct descriptor sets demonstrate multiple independently cached images
+  // in one fragment pipeline while retaining binding zero in each set.
+  {"image"_view, 0, 0, Photophore::Description::Resource::SampledTexture2D},
+  {"overlay"_view, 1, 0, Photophore::Description::Resource::SampledTexture2D},
 };
 
-static const Description::HostField host_fields[] = {
-  {"transform_x"_view, 0, sizeof(R32) * 4, Description::HostRole::TransformX},
+static const Photophore::Description::HostField host_fields[] = {
+  // Pipelines derives transform rows from each Batch and copies tone from its
+  // variable parameter bytes into the same generated host block.
+  {"transform_x"_view, 0, sizeof(R32) * 4,
+   Photophore::Description::HostRole::TransformX},
   {
     "transform_y"_view,
     sizeof(R32) * 4,
     sizeof(R32) * 4,
-    Description::HostRole::TransformY,
+    Photophore::Description::HostRole::TransformY,
   },
   {
     "tone"_view,
     sizeof(R32) * 8,
     sizeof(R32) * 4,
-    Description::HostRole::Parameter,
+    Photophore::Description::HostRole::Parameter,
   },
 };
 
-static constexpr Description::VertexInput vertex_inputs[] = {
+static constexpr Photophore::Description::VertexInput vertex_inputs[] = {
+  // The fixed unit quad interleaves position and texture coordinates as two
+  // float pairs, matching the vertex module locations zero and one.
   {0, 2, 0, sizeof(R32) * 4},
   {1, 2, sizeof(R32) * 2, sizeof(R32) * 4},
 };
 
-auto Photophore::Examples::SpriteProgram::get_locator() -> Frame::Program {
-  return Frame::Program(&program_locator);
+auto Photophore::Examples::SpriteProgram::get_locator()
+    -> Photophore::Frame::Program {
+  return Photophore::Frame::Program(&program_locator);
 }
 
 auto Photophore::Examples::SpriteProgram::get_description()
-    -> Description::Program {
+    -> Photophore::Description::Program {
   return {
     .locator = &program_locator,
-    .modules =
-        View::Vector<Description::Module>(modules, Data::array_size(modules)),
-    .host_input_ranges = View::Vector<Description::HostInputRange>(
+    .modules = View::Vector<Photophore::Description::Module>(
+        modules, Data::array_size(modules)),
+    .host_input_ranges = View::Vector<Photophore::Description::HostInputRange>(
         host_input_ranges, Data::array_size(host_input_ranges)),
-    .descriptors = View::Vector<Description::DescriptorBinding>(
+    .descriptors = View::Vector<Photophore::Description::DescriptorBinding>(
         descriptors, Data::array_size(descriptors)),
-    .host_fields = View::Vector<Description::HostField>(
+    .host_fields = View::Vector<Photophore::Description::HostField>(
         host_fields, Data::array_size(host_fields)),
-    .vertex_inputs = View::Vector<Description::VertexInput>(
+    .vertex_inputs = View::Vector<Photophore::Description::VertexInput>(
         vertex_inputs, Data::array_size(vertex_inputs)),
     .host_size = sizeof(R32) * 12,
     .parameters_offset = sizeof(R32) * 8,

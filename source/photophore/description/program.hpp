@@ -13,18 +13,21 @@
 
 namespace Photophore::Description {
 
-// Program is the input to Vulkan pipeline construction. A compiler or another
-// producer supplies executable SPIR V modules together with the resource,
-// vertex and host input layouts those modules expect. Draws select this record
-// by locator and supply their changing values through Frame::Batch.
+// Program is the complete compiled input to one Vulkan pipeline family. It
+// joins executable SPIR V modules with the descriptor, vertex and host layouts
+// those modules consume. Frame::Batch selects this product through locator and
+// supplies its changing resources, placement and parameter bytes.
 //
-// All arrays and names are borrowed. Pipelines retains pointers into this
-// inventory, so the complete description must outlive that Pipelines owner.
-// The locator is an opaque address token, compared without dereferencing it,
-// and must be unique within the inventory. host_size covers the entire push
-// input block, with parameters_offset and parameters_size locating the bytes
-// copied from each batch. HostRole fields describe the placement values filled
-// by the renderer around that parameter region.
+// The caller lends every nested array, name and module for the lifetime of the
+// Pipelines instance that receives this Program. locator is a stable address
+// identity shared with Frame::Program and is unique within that inventory.
+// Pipelines compares the address as a token while the referenced byte remains
+// ordinary caller storage.
+//
+// host_size covers the complete push input block. parameters_offset and
+// parameters_size locate the contiguous region copied from each batch, while
+// HostField entries fill placement values around that region. HostInputRange
+// entries publish the stage visibility expected by the compiled modules.
 struct Program {
   const U8* locator = nullptr;
   Perimortem::Core::View::Vector<Module> modules;

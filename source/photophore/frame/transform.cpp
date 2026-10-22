@@ -3,8 +3,9 @@
 
 #include "photophore/frame/transform.hpp"
 
-using namespace Perimortem;
-
+// create stores a two dimensional affine matrix as two rows. Multiplying scale
+// into the rotation columns preserves the documented scale, rotate, translate
+// application order for unit quad coordinates.
 auto Photophore::Frame::Transform::create(
     R64 translation_x,
     R64 translation_y,
@@ -21,6 +22,8 @@ auto Photophore::Frame::Transform::create(
 auto Photophore::Frame::Transform::compose(
     const Transform& parent,
     const Transform& local) -> Transform {
+  // Matrix multiplication places local coordinates first and then carries the
+  // result through the parent, including translation in the same operation.
   return Transform(
       parent.xx * local.xx + parent.xy * local.yx,
       parent.xx * local.xy + parent.xy * local.yy,

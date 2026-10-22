@@ -13,19 +13,19 @@
 #include "photophore/frame/pipeline.hpp"
 #include "photophore/frame/program.hpp"
 #include "photophore/frame/transform.hpp"
-#include "photophore/texture_2d.hpp"
+#include "photophore/image/texture_2d.hpp"
 
 namespace Photophore::Frame {
 
-// Batch captures one draw's values while its source objects are available.
-// It owns the parameter bytes and retains each Texture2D's shared pixel matrix,
-// so later changes to source placement or resource selection cannot rewrite the
-// captured values. Its Program locator still borrows a stable identity token.
+// Batch is one complete draw submitted to Pipelines. Construction moves the
+// parameter bytes and resource list into the batch, while each Texture2D keeps
+// its shared pixel matrix alive. Transform and size are copied values, and
+// Program lends the stable locator published by Description::Program.
 //
-// The comparison orders batches by z_index and then authored_order, allowing
-// callers to establish a deterministic draw order before recording. Pipelines
-// records the supplied order and does not sort or retain the batches. Keeping a
-// batch alive retains CPU resources, but does not itself wait for GPU use.
+// operator> orders z_index first and authored_order second, giving callers a
+// deterministic sorting rule before submission. Pipelines records the order it
+// receives and borrows each Batch for that call. The batch lifetime retains CPU
+// resources, while Renderer frame completion establishes their GPU lifetime.
 class Batch {
  public:
   Batch() = default;
@@ -33,7 +33,7 @@ class Batch {
   EXPORTED(PHOTOPHORE)
   Batch(
       Program program,
-      Perimortem::Memory::Dynamic::Vector<Texture2D>&& resources,
+      Perimortem::Memory::Dynamic::Vector<Image::Texture2D>&& resources,
       Perimortem::Memory::Dynamic::Bytes&& inputs,
       Transform transform,
       Perimortem::Math::Size<U32, 2> size_pixels,
@@ -44,7 +44,7 @@ class Batch {
 
   constexpr auto get_program() const -> Program { return program; }
   constexpr auto get_resources() const
-      -> Perimortem::Core::View::Vector<Texture2D> {
+      -> Perimortem::Core::View::Vector<Image::Texture2D> {
     return resources.get_view();
   }
   EXPORTED(PHOTOPHORE) auto get_inputs() const -> Perimortem::Core::View::Bytes;
@@ -63,7 +63,7 @@ class Batch {
 
  private:
   Program program;
-  Perimortem::Memory::Dynamic::Vector<Texture2D> resources;
+  Perimortem::Memory::Dynamic::Vector<Image::Texture2D> resources;
   Perimortem::Memory::Dynamic::Bytes inputs;
   Transform transform;
   Perimortem::Math::Size<U32, 2> size_pixels;

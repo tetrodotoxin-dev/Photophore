@@ -9,11 +9,14 @@
 
 namespace Photophore::Description {
 
-// Host fields locate values inside Program::host_size. A Parameter field must
-// lie inside the batch parameter region, which is copied as already laid out
-// bytes. Transform roles are filled from the batch's placement and framebuffer
-// dimensions and occupy four R32 values. The borrowed name is reflection data,
-// so filling the block does not depend on spelling or a source language Type.
+// HostField locates one value in Program's complete host input block. Parameter
+// selects bytes copied from Frame::Batch, while TransformX and TransformY
+// select the affine rows derived from its placement and framebuffer extent.
+// Each transform row occupies four R32 values.
+//
+// name preserves borrowed reflection data for diagnostics. Pipelines fills the
+// block from role, offset and size, giving compiled layout facts authority over
+// a producer's naming convention.
 struct HostField {
   Perimortem::Core::View::Bytes name;
   Count offset = 0;

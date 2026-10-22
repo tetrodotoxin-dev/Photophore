@@ -9,10 +9,15 @@
 
 namespace Photophore::Description {
 
-// A batch's resources follow this list in order. set and slot locate each
-// resource in the shader interface, while name preserves the producer's label
-// as borrowed reflection data. The current Pipelines path accepts one sampled
-// texture at slot zero per distinct set and rejects other arrangements.
+// DescriptorBinding describes one resource position in a compiled shader.
+// Frame::Batch supplies Texture2D values in this same sequence, so Pipelines
+// can bind a draw by index while set and slot preserve the shader declaration.
+// name remains borrowed reflection data for diagnostics and inspection.
+//
+// The current Vulkan realization admits sampled textures at slot zero and
+// gives each texture a distinct descriptor set. That profile keeps every
+// Texture in one independently allocated set while Program preserves the full
+// shader coordinates independently of that realization profile.
 struct DescriptorBinding {
   Perimortem::Core::View::Bytes name;
   Count set = 0;
