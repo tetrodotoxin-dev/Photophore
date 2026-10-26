@@ -3,6 +3,8 @@
 
 #pragma once
 
+#define TOOLCHAIN_PRIVATE_HEADER 1
+
 #include "toolchain/toolchain.h"
 
 #ifdef TOOLCHAIN_WINDOWS
