@@ -1,8 +1,9 @@
 // # Tetrodotoxin
 // Copyright (c) 2023-present Matt Kaes and contributors
 
-// One inventory keeps dispatch declarations and symbol acquisition in
-// agreement.
+// Dispatch expands this inventory to both its member declarations and loader
+// assignments. Adding a required Vulkan operation in one place therefore keeps
+// compilation and runtime completeness checks on the same function set.
 PHOTOPHORE_VULKAN(vkAcquireNextImageKHR)
 PHOTOPHORE_VULKAN(vkAllocateCommandBuffers)
 PHOTOPHORE_VULKAN(vkAllocateDescriptorSets)

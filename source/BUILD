@@ -20,22 +20,15 @@ _LIBRARY = dict(
     ),
     implementation_deps = ["//source/implementation:headers"],
     includes = ["."],
-    deps = [
-        "@perimortem//:core",
-        "@perimortem//:math",
-        "@perimortem//:memory",
-        "@perimortem//:serialization",
-        "@perimortem//:system",
-        "@vulkan_headers",
-    ],
+    module = "photophore",
 )
 
 _COMPONENTS = {
     "description": [],
+    "frame": ["image"],
     "image": [],
     "input": [],
     "platform": ["input"],
-    "frame": ["image"],
     "scene": [
         "frame",
         "image",
@@ -48,13 +41,41 @@ _COMPONENTS = {
     ],
 }
 
+_COMPONENT_DEPS = {
+    "description": ["@perimortem//:core"],
+    "frame": [
+        "@perimortem//:core",
+        "@perimortem//:memory",
+    ],
+    "image": [
+        "@perimortem//:core",
+        "@perimortem//:memory",
+    ],
+    "input": ["@perimortem//:core"],
+    "platform": ["@perimortem//:core"],
+    "scene": ["@perimortem//:core"],
+    "vulkan": [
+        "@perimortem//:core",
+        "@perimortem//:memory",
+        "@vulkan_headers",
+    ],
+}
+
 library(
+    name = "photophore_static",
     srcs = _LIBRARY["srcs"],
     hdrs = _LIBRARY["hdrs"],
+    component_deps = _COMPONENT_DEPS,
     components = _COMPONENTS,
     implementation_deps = _LIBRARY["implementation_deps"],
     includes = _LIBRARY["includes"],
-    deps = _LIBRARY["deps"],
+    module = _LIBRARY["module"],
+    deps = [
+        "@perimortem_static//:core",
+        "@perimortem_static//:memory",
+        "@perimortem_static//:system",
+        "@vulkan_headers",
+    ],
 )
 
 library(
@@ -64,9 +85,15 @@ library(
     implementation_deps = _LIBRARY["implementation_deps"],
     includes = _LIBRARY["includes"],
     linkage = "shared",
+    module = _LIBRARY["module"],
     shared_lib_name = select({
         WINDOWS: "photophore.dll",
         "//conditions:default": "libphotophore.so",
     }),
-    deps = _LIBRARY["deps"],
+    deps = [
+        "@perimortem//:core",
+        "@perimortem//:memory",
+        "@perimortem//:system",
+        "@vulkan_headers",
+    ],
 )

@@ -5,7 +5,7 @@
 
 #include <vulkan/vulkan.h>
 
-#include "perimortem/core/perimortem.hpp"
+#include "toolchain/toolchain.hpp"
 
 #include "photophore/image/texture_2d.hpp"
 #include "photophore/vulkan/context.hpp"
@@ -32,7 +32,7 @@ class TextureImage {
   EXPORTED(PHOTOPHORE) TextureImage(TextureImage&&) noexcept;
   EXPORTED(PHOTOPHORE) auto operator=(TextureImage&&) noexcept -> TextureImage&;
   TextureImage(const TextureImage&) = delete;
-  auto operator=(const TextureImage&) = delete;
+  auto operator=(const TextureImage&) -> TextureImage& = delete;
 
   constexpr auto get_view() const -> VkImageView { return image_view; }
 

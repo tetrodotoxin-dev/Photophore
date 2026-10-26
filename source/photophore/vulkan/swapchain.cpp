@@ -4,15 +4,15 @@
 #include "photophore/vulkan/swapchain.hpp"
 
 #include "perimortem/core/diagnostics/log.hpp"
-#include "perimortem/core/null_terminated.hpp"
-#include "perimortem/core/scalar.hpp"
-
-#include "perimortem/memory/dynamic/vector.hpp"
+#include "perimortem/core/math/scalar.hpp"
+#include "perimortem/core/view/null_terminated.hpp"
+#include "perimortem/memory/thread/vector.hpp"
 
 #include "implementation/vulkan/dispatch.hpp"
 
 using namespace Perimortem::Core;
 using namespace Photophore::Vulkan;
+using namespace Perimortem::Memory;
 
 static auto require_success(VkResult result, View::Bytes message) -> void {
   if (result != VK_SUCCESS) {
@@ -32,22 +32,24 @@ static auto require_enumeration_read(VkResult result, View::Bytes message)
 static auto choose_surface_format(
     VkPhysicalDevice physical_device,
     VkSurfaceKHR surface) -> VkSurfaceFormatKHR {
-  // sRGB preserves the authored color interpretation through presentation.
-  // The first advertised pair remains the device selected fallback.
+  // The preferred pair stores sRGB attachment bytes and presents them through
+  // the nonlinear sRGB color space. When unavailable, the first advertised
+  // format and color space pair becomes the device selected fallback.
   U32 surface_format_count = 0;
   require_success(
-      Photophore::Vulkan::vkGetPhysicalDeviceSurfaceFormatsKHR(
+      Dispatch::vkGetPhysicalDeviceSurfaceFormatsKHR(
           physical_device, surface, &surface_format_count, nullptr),
       "Vulkan: Failed to query swapchain surface formats."_view);
   if (surface_format_count == 0) {
     Diagnostics::Log::fatal("Vulkan: No swapchain surface formats found."_view);
   }
 
-  Perimortem::Memory::Dynamic::Vector<VkSurfaceFormatKHR> surface_formats;
+  Thread::Vector<VkSurfaceFormatKHR> surface_formats;
   surface_formats.forgetful_resize(surface_format_count);
+
   U32 read_surface_format_count = surface_format_count;
   require_enumeration_read(
-      Photophore::Vulkan::vkGetPhysicalDeviceSurfaceFormatsKHR(
+      Dispatch::vkGetPhysicalDeviceSurfaceFormatsKHR(
           physical_device, surface, &read_surface_format_count,
           surface_formats.get_data()),
       "Vulkan: Failed to read swapchain surface formats."_view);
@@ -57,19 +59,22 @@ static auto choose_surface_format(
 
   const VkSurfaceFormatKHR preferred_surface_format = {
     VK_FORMAT_B8G8R8A8_SRGB, VK_COLOR_SPACE_SRGB_NONLINEAR_KHR};
+
   if (read_surface_format_count == 1 &&
-      surface_formats[0].format == VK_FORMAT_UNDEFINED) {
+      surface_formats.get_data()[0].format == VK_FORMAT_UNDEFINED) {
     return preferred_surface_format;
   }
 
   for (U32 i = 0; i < read_surface_format_count; i++) {
-    if (surface_formats[i].format == preferred_surface_format.format &&
-        surface_formats[i].colorSpace == preferred_surface_format.colorSpace) {
-      return surface_formats[i];
+    if (surface_formats.get_data()[i].format ==
+            preferred_surface_format.format &&
+        surface_formats.get_data()[i].colorSpace ==
+            preferred_surface_format.colorSpace) {
+      return surface_formats.get_data()[i];
     }
   }
 
-  return surface_formats[0];
+  return surface_formats.get_data()[0];
 }
 
 static auto choose_present_mode(
@@ -77,18 +82,19 @@ static auto choose_present_mode(
     VkSurfaceKHR surface) -> VkPresentModeKHR {
   U32 present_mode_count = 0;
   require_success(
-      Photophore::Vulkan::vkGetPhysicalDeviceSurfacePresentModesKHR(
+      Dispatch::vkGetPhysicalDeviceSurfacePresentModesKHR(
           physical_device, surface, &present_mode_count, nullptr),
       "Vulkan: Failed to query swapchain present modes."_view);
   if (present_mode_count == 0) {
     Diagnostics::Log::fatal("Vulkan: No swapchain present modes found."_view);
   }
 
-  Perimortem::Memory::Dynamic::Vector<VkPresentModeKHR> present_modes;
+  Thread::Vector<VkPresentModeKHR> present_modes;
   present_modes.forgetful_resize(present_mode_count);
+
   U32 read_present_mode_count = present_mode_count;
   require_enumeration_read(
-      Photophore::Vulkan::vkGetPhysicalDeviceSurfacePresentModesKHR(
+      Dispatch::vkGetPhysicalDeviceSurfacePresentModesKHR(
           physical_device, surface, &read_present_mode_count,
           present_modes.get_data()),
       "Vulkan: Failed to read swapchain present modes."_view);
@@ -97,7 +103,7 @@ static auto choose_present_mode(
   }
 
   for (U32 i = 0; i < read_present_mode_count; i++) {
-    if (present_modes[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
+    if (present_modes.get_data()[i] == VK_PRESENT_MODE_MAILBOX_KHR) {
       return VK_PRESENT_MODE_MAILBOX_KHR;
     }
   }
@@ -116,6 +122,7 @@ static auto build(
   // `build` resolves every surface dependent choice into one complete Storage.
   // The caller publishes that value only after creation and image view setup.
   swapchain_state.device = ctx.get_device();
+
   const VkSurfaceKHR surface = ctx.get_surface();
 
   const VkSurfaceFormatKHR surface_format =
@@ -128,22 +135,23 @@ static auto build(
 
   VkSurfaceCapabilitiesKHR surface_capabilities = {};
   require_success(
-      Photophore::Vulkan::vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+      Dispatch::vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
           ctx.get_physical_device(), surface, &surface_capabilities),
       "Vulkan: Failed to query swapchain surface capabilities."_view);
 
   // Win32 fixes the extent to its client area. Wayland lets the caller choose
   // within the surface limits, so use the requested size only in that case.
-  if (surface_capabilities.currentExtent.width != UINT32_MAX) {
+  if (surface_capabilities.currentExtent.width != U32(-1)) {
     swapchain_state.extent = surface_capabilities.currentExtent;
   } else {
-    swapchain_state.extent.width = Scalar::clamp(
+    swapchain_state.extent.width = Math::Scalar::clamp(
         width, surface_capabilities.minImageExtent.width,
         surface_capabilities.maxImageExtent.width);
-    swapchain_state.extent.height = Scalar::clamp(
+    swapchain_state.extent.height = Math::Scalar::clamp(
         height, surface_capabilities.minImageExtent.height,
         surface_capabilities.maxImageExtent.height);
   }
+
   if (!swapchain_state.extent.width || !swapchain_state.extent.height) {
     return False;
   }
@@ -161,6 +169,7 @@ static auto build(
 
   VkSwapchainCreateInfoKHR swapchain_info = {
     VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
+
   swapchain_info.surface = surface;
   swapchain_info.minImageCount = image_count;
   swapchain_info.imageFormat = swapchain_state.format;
@@ -178,14 +187,14 @@ static auto build(
   swapchain_info.oldSwapchain = old_swapchain;
 
   require_success(
-      Photophore::Vulkan::vkCreateSwapchainKHR(
+      Dispatch::vkCreateSwapchainKHR(
           swapchain_state.device, &swapchain_info, nullptr,
           &swapchain_state.swapchain),
       "Vulkan: Failed to create swapchain."_view);
 
   swapchain_state.image_count = 0;
   require_success(
-      Photophore::Vulkan::vkGetSwapchainImagesKHR(
+      Dispatch::vkGetSwapchainImagesKHR(
           swapchain_state.device, swapchain_state.swapchain,
           &swapchain_state.image_count, nullptr),
       "Vulkan: Failed to query swapchain images."_view);
@@ -194,7 +203,7 @@ static auto build(
   }
 
   require_enumeration_read(
-      Photophore::Vulkan::vkGetSwapchainImagesKHR(
+      Dispatch::vkGetSwapchainImagesKHR(
           swapchain_state.device, swapchain_state.swapchain,
           &swapchain_state.image_count, swapchain_state.images.get_data()),
       "Vulkan: Failed to read swapchain images."_view);
@@ -207,6 +216,7 @@ static auto build(
   for (U32 i = 0; i < swapchain_state.image_count; i++) {
     VkImageViewCreateInfo image_view_info = {
       VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
+
     image_view_info.image = swapchain_state.images[i];
     image_view_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     image_view_info.format = swapchain_state.format;
@@ -216,7 +226,7 @@ static auto build(
     image_view_info.subresourceRange.baseArrayLayer = 0;
     image_view_info.subresourceRange.layerCount = 1;
     require_success(
-        Photophore::Vulkan::vkCreateImageView(
+        Dispatch::vkCreateImageView(
             swapchain_state.device, &image_view_info, nullptr,
             &swapchain_state.image_views[i]),
         "Vulkan: Failed to create swapchain image view."_view);
@@ -231,17 +241,14 @@ static auto destroy(const auto& storage) -> void {
   }
 
   for (U32 index = 0; index < storage.image_count; index++) {
-    Photophore::Vulkan::vkDestroyImageView(
+    Dispatch::vkDestroyImageView(
         storage.device, storage.image_views[index], nullptr);
   }
-  Photophore::Vulkan::vkDestroySwapchainKHR(
-      storage.device, storage.swapchain, nullptr);
+
+  Dispatch::vkDestroySwapchainKHR(storage.device, storage.swapchain, nullptr);
 }
 
-auto Photophore::Vulkan::Swapchain::create(
-    const Context& ctx,
-    U32 width,
-    U32 height) -> Swapchain {
+auto Swapchain::create(const Context& ctx, U32 width, U32 height) -> Swapchain {
   if (!ctx.get_device() || !width || !height) {
     return Swapchain();
   }
@@ -250,13 +257,11 @@ auto Photophore::Vulkan::Swapchain::create(
   if (!build(ctx, width, height, VK_NULL_HANDLE, output.storage)) {
     return Swapchain();
   }
+
   return output;
 }
 
-auto Photophore::Vulkan::Swapchain::recreate(
-    const Context& ctx,
-    U32 width,
-    U32 height) -> void {
+auto Swapchain::recreate(const Context& ctx, U32 width, U32 height) -> void {
   // Renderer has completed use of the current images before this call. Passing
   // their chain into creation gives Vulkan the replacement relationship, then
   // the old views and handle can retire in native dependency order.
@@ -264,22 +269,21 @@ auto Photophore::Vulkan::Swapchain::recreate(
   if (!build(ctx, width, height, storage.swapchain, replacement)) {
     replacement = Storage();
   }
+
   destroy(storage);
   storage = replacement;
 }
 
-Photophore::Vulkan::Swapchain::~Swapchain() {
+Swapchain::~Swapchain() {
   destroy(storage);
 }
 
-Photophore::Vulkan::Swapchain::Swapchain(Swapchain&& other) noexcept
-    : storage(other.storage) {
+Swapchain::Swapchain(Swapchain&& other) noexcept : storage(other.storage) {
   other.storage.swapchain = VK_NULL_HANDLE;
   other.storage.image_count = 0;
 }
 
-auto Photophore::Vulkan::Swapchain::operator=(Swapchain&& other) noexcept
-    -> Swapchain& {
+auto Swapchain::operator=(Swapchain&& other) noexcept -> Swapchain& {
   if (this == &other) {
     return *this;
   }
@@ -291,44 +295,45 @@ auto Photophore::Vulkan::Swapchain::operator=(Swapchain&& other) noexcept
   return *this;
 }
 
-auto Photophore::Vulkan::Swapchain::acquire_next_image(
-    VkSemaphore signal_semaphore) const -> U32 {
+auto Swapchain::acquire_next_image(VkSemaphore signal_semaphore) const -> U32 {
   U32 index = 0;
-  const VkResult result = Photophore::Vulkan::vkAcquireNextImageKHR(
-      storage.device, storage.swapchain, UINT64_MAX, signal_semaphore,
+  const VkResult result = Dispatch::vkAcquireNextImageKHR(
+      storage.device, storage.swapchain, U64(-1), signal_semaphore,
       VK_NULL_HANDLE, &index);
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {
-    return UINT32_MAX;
+    return U32(-1);
   }
+
   // SUBOPTIMAL still acquires an image and signals the semaphore. Submitting
   // that image consumes the signal before this frame slot can be used again.
+
   if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
     Diagnostics::Log::fatal("Vulkan: Failed to acquire swapchain image."_view);
   }
+
   return index;
 }
 
-auto Photophore::Vulkan::Swapchain::get_swapchain() const -> VkSwapchainKHR {
+auto Swapchain::get_swapchain() const -> VkSwapchainKHR {
   return storage.swapchain;
 }
 
-auto Photophore::Vulkan::Swapchain::get_extent() const -> VkExtent2D {
+auto Swapchain::get_extent() const -> VkExtent2D {
   return storage.extent;
 }
 
-auto Photophore::Vulkan::Swapchain::get_format() const -> VkFormat {
+auto Swapchain::get_format() const -> VkFormat {
   return storage.format;
 }
 
-auto Photophore::Vulkan::Swapchain::get_image(U32 index) const -> VkImage {
+auto Swapchain::get_image(U32 index) const -> VkImage {
   return storage.images[index];
 }
 
-auto Photophore::Vulkan::Swapchain::get_image_view(U32 index) const
-    -> VkImageView {
+auto Swapchain::get_image_view(U32 index) const -> VkImageView {
   return storage.image_views[index];
 }
 
-auto Photophore::Vulkan::Swapchain::get_image_count() const -> U32 {
+auto Swapchain::get_image_count() const -> U32 {
   return storage.image_count;
 }

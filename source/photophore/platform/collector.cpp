@@ -1,19 +1,21 @@
 // # Tetrodotoxin
 // Copyright (c) 2023-present Matt Kaes and contributors
 
-#include "photophore/platform/input.hpp"
+#include "photophore/platform/collector.hpp"
 
-#ifdef PERI_LINUX
+#ifdef TOOLCHAIN_LINUX
 #include <linux/input-event-codes.h>
-#elifdef PERI_WINDOWS
+#elifdef TOOLCHAIN_WINDOWS
 #include <windows.h>
 #endif
 
-auto Photophore::Platform::Input::set_key(Photophore::Input::Key key, Bool down)
-    -> void {
+using namespace Perimortem::Core;
+using namespace Photophore::Input;
+using namespace Photophore::Platform;
+
+auto Collector::set_key(Key key, Bool down) -> void {
   Count index = Count(key);
-  if (key == Photophore::Input::Key::None ||
-      index >= Photophore::Input::key_count) {
+  if (key == Key::None || index >= key_count) {
     return;
   }
 
@@ -25,44 +27,41 @@ auto Photophore::Platform::Input::set_key(Photophore::Input::Key key, Bool down)
   }
 }
 
-auto Photophore::Platform::Input::clear_keyboard() -> void {
-  for (Count index = Count(Photophore::Input::Key::Escape);
-       index < Count(Photophore::Input::Key::MousePrimary); index++) {
-    set_key(Photophore::Input::Key(index), False);
+auto Collector::clear_keyboard() -> void {
+  for (Count index = Count(Key::Escape); index < Count(Key::MousePrimary);
+       index++) {
+    set_key(Key(index), False);
   }
 }
 
-auto Photophore::Platform::Input::clear_pointer() -> void {
-  for (Count index = Count(Photophore::Input::Key::MousePrimary);
-       index <= Count(Photophore::Input::Key::MouseEight); index++) {
-    set_key(Photophore::Input::Key(index), False);
+auto Collector::clear_pointer() -> void {
+  for (Count index = Count(Key::MousePrimary); index <= Count(Key::MouseEight);
+       index++) {
+    set_key(Key(index), False);
   }
+
   pointer_focused = False;
 }
 
-auto Photophore::Platform::Input::collect(
-    const Photophore::Input::Mapping& mapping) -> Photophore::Input::Snapshot {
-  Perimortem::Core::Static::Vector<
-      Photophore::Input::Key, Photophore::Input::key_count>
-      current_keys;
-  Perimortem::Core::Static::Vector<
-      Photophore::Input::Key, Photophore::Input::key_count>
-      previous_keys;
+auto Collector::collect(const Mapping& mapping) -> Snapshot {
+  Storage::Vector<Key, key_count> current_keys;
+  Storage::Vector<Key, key_count> previous_keys;
   Count current_count = 0;
   Count previous_count = 0;
-  for (Count index = 1; index < Photophore::Input::key_count; index++) {
+  for (Count index = 1; index < key_count; index++) {
     U64 mask = U64(1) << (index % word_bits);
     if ((current[index / word_bits] & mask) != 0) {
-      current_keys[current_count++] = Photophore::Input::Key(index);
+      current_keys[current_count++] = Key(index);
     }
+
     if ((previous[index / word_bits] & mask) != 0) {
-      previous_keys[previous_count++] = Photophore::Input::Key(index);
+      previous_keys[previous_count++] = Key(index);
     }
   }
 
   // Each focused interval establishes its own pointer motion baseline. The
   // first observation in a new interval therefore begins with a zero delta.
-  Photophore::Input::Pointer pointer_state = {
+  Pointer pointer_state = {
     pointer_x,
     pointer_y,
     pointer_focused && previous_pointer_focused ? pointer_x - previous_pointer_x
@@ -73,7 +72,8 @@ auto Photophore::Platform::Input::collect(
     scroll_y,
     pointer_focused,
   };
-  Photophore::Input::Snapshot output = Photophore::Input::Snapshot::create(
+
+  Snapshot output = Snapshot::create(
       current_keys.slice(0, current_count),
       previous_keys.slice(0, previous_count), mapping, pointer_state);
 
@@ -89,24 +89,26 @@ auto Photophore::Platform::Input::collect(
   return output;
 }
 
-auto Photophore::Platform::Input::set_pointer(R32 x, R32 y) -> void {
+auto Collector::set_pointer(R32 x, R32 y) -> void {
   if (!pointer_focused) {
     previous_pointer_focused = False;
   }
+
   pointer_x = x;
   pointer_y = y;
   pointer_focused = True;
 }
 
-auto Photophore::Platform::Input::scroll(R32 x, R32 y) -> void {
+auto Collector::scroll(R32 x, R32 y) -> void {
   if (pointer_focused) {
     scroll_x += x;
     scroll_y += y;
   }
 }
 
-auto Photophore::Platform::Input::translate_keyboard(U32 code) -> Key {
-#ifdef PERI_LINUX
+auto Collector::translate_keyboard(U32 code) -> Key {
+
+#ifdef TOOLCHAIN_LINUX
 
   // Wayland supplies Linux evdev key codes directly. Mapping physical positions
   // before text interpretation keeps controls stable across character layouts.
@@ -385,7 +387,7 @@ auto Photophore::Platform::Input::translate_keyboard(U32 code) -> Key {
     return Key::None;
   }
 
-#elifdef PERI_WINDOWS
+#elifdef TOOLCHAIN_WINDOWS
 
   // Scan 1 identifies physical positions independently of the active keyboard
   // layout. E0 prefixes distinguish keys that share their base code.
@@ -675,8 +677,9 @@ auto Photophore::Platform::Input::translate_keyboard(U32 code) -> Key {
 #endif
 }
 
-auto Photophore::Platform::Input::translate_button(U32 code) -> Key {
-#ifdef PERI_LINUX
+auto Collector::translate_button(U32 code) -> Key {
+
+#ifdef TOOLCHAIN_LINUX
 
   switch (code) {
   case BTN_LEFT:
@@ -701,7 +704,7 @@ auto Photophore::Platform::Input::translate_button(U32 code) -> Key {
     return Key::None;
   }
 
-#elifdef PERI_WINDOWS
+#elifdef TOOLCHAIN_WINDOWS
 
   switch (code) {
   case VK_LBUTTON:

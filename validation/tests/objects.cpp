@@ -1,21 +1,20 @@
 // # Tetrodotoxin
 // Copyright (c) 2023-present Matt Kaes and contributors
 
-#include "perimortem/core/static/vector.hpp"
+#include "toolchain/validation/test.hpp"
 
-#include "perimortem/memory/dynamic/vector.hpp"
+#include "perimortem/core/math/domain.hpp"
+#include "perimortem/core/math/point.hpp"
+#include "perimortem/core/math/size.hpp"
+#include "perimortem/core/storage/vector.hpp"
 #include "perimortem/memory/matrix.hpp"
+#include "perimortem/memory/thread/vector.hpp"
 
-#include "perimortem/math/domain.hpp"
-#include "perimortem/math/point.hpp"
-#include "perimortem/math/size.hpp"
 #include "photophore/image/srgba8.hpp"
 #include "photophore/image/texture_2d.hpp"
 #include "photophore/scene/sprite.hpp"
-#include "toolchain/validation/unit_test.hpp"
 
 using namespace Perimortem::Core;
-using namespace Perimortem::Math;
 using namespace Perimortem::Memory;
 using namespace Toolchain::Validation;
 using namespace Photophore::Image;
@@ -25,17 +24,16 @@ static Harness GraphicsObjects = {
   .name = "Photophore::Objects",
 };
 
-static auto make_size(U32 width, U32 height) -> Size<U32, 2> {
-  Static::Vector<U32, 2> dimensions = {{width, height}};
-  return Size<U32, 2>(dimensions);
+static auto make_size(U32 width, U32 height) -> Math::Size<U32, 2> {
+  Storage::Vector<U32, 2> dimensions = {{width, height}};
+  return Math::Size<U32, 2>(dimensions);
 }
 
 static auto one_pixel_image() -> Matrix<Srgba8> {
-  Dynamic::Vector<Srgba8> pixels;
-  pixels.emplace(Srgba8::from_rgba(0x12, 0x34, 0x56, 0x78));
+  Thread::Vector<Srgba8> pixels;
+  pixels.insert(Srgba8::from_rgba(0x12, 0x34, 0x56, 0x78));
   return Matrix<Srgba8>::create(
-      Domain<2, Boundary::Clip, Boundary::Clip>(make_size(1, 1)),
-      pixels.get_view());
+      Math::Domain<2>(make_size(1, 1)), pixels.get_view());
 }
 
 VALIDATION_TEST(GraphicsObjects, sprite_values) {
@@ -47,9 +45,10 @@ VALIDATION_TEST(GraphicsObjects, sprite_values) {
   Texture2D texture(one_pixel_image());
   sprite.set_texture(texture);
   sprite.set_size(make_size(64, 32));
+
   Transform2D transform;
-  Static::Vector<R64, 2> translation = {{12, 34}};
-  transform.translation = Point<R64, 2>{{translation}};
+  Storage::Vector<R64, 2> translation = {{12, 34}};
+  transform.translation = Math::Point<R64, 2>{{translation}};
   transform.scale_x = 2.0;
   sprite.set_transform(transform);
   sprite.set_z_index(7);

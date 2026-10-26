@@ -3,10 +3,12 @@
 
 #include "photophore/frame/transform.hpp"
 
-// create stores a two dimensional affine matrix as two rows. Multiplying scale
-// into the rotation columns preserves the documented scale, rotate, translate
-// application order for unit quad coordinates.
-auto Photophore::Frame::Transform::create(
+using namespace Photophore::Frame;
+
+// The two stored rows apply scale, then rotation, then translation to unit quad
+// coordinates. Multiplying scale into the rotation columns constructs that
+// order directly without an intermediate matrix.
+auto Transform::create(
     R64 translation_x,
     R64 translation_y,
     R64 scale_x,
@@ -19,9 +21,8 @@ auto Photophore::Frame::Transform::create(
       translation_x, translation_y);
 }
 
-auto Photophore::Frame::Transform::compose(
-    const Transform& parent,
-    const Transform& local) -> Transform {
+auto Transform::compose(const Transform& parent, const Transform& local)
+    -> Transform {
   // Matrix multiplication places local coordinates first and then carries the
   // result through the parent, including translation in the same operation.
   return Transform(

@@ -3,15 +3,19 @@
 
 #pragma once
 
-#include "perimortem/core/perimortem.hpp"
+#include "toolchain/toolchain.hpp"
 
 namespace Photophore::Image {
 
-// Sampler2D is the copied sampling policy paired with a Texture2D matrix.
-// Pipelines keys descriptor realizations by matrix identity and this value, so
-// several policies can reuse one uploaded TextureImage. Zero selects a
-// transparent border, Clamp extends edge texels and Wrap repeats the image.
-// Linear interpolation is the default filter.
+// Sampler2D stores the addressing and filtering rules for unit Texture2D
+// coordinates. Addressing::Zero returns a transparent border,
+// Addressing::Clamp extends edge texels and Addressing::Wrap repeats the image.
+// Filtering selects linear interpolation or the nearest texel.
+//
+// `create` preserves any declared Addressing and Filtering pair. Its default
+// arguments select a transparent border with linear interpolation. Equality
+// compares the two U8 fields, so one pixel Matrix can carry distinct sampling
+// values without an allocation.
 class Sampler2D {
  public:
   enum class Addressing : U8 {
@@ -25,9 +29,11 @@ class Sampler2D {
     Nearest,
   };
 
-  constexpr Sampler2D() = default;
-  constexpr Sampler2D(Addressing addressing, Filtering filtering)
-      : addressing(addressing), filtering(filtering) {}
+  static constexpr auto create(
+      Addressing addressing = Addressing::Zero,
+      Filtering filtering = Filtering::Linear) -> Sampler2D {
+    return Sampler2D(addressing, filtering);
+  }
 
   constexpr auto get_addressing() const -> Addressing { return addressing; }
   constexpr auto get_filtering() const -> Filtering { return filtering; }
@@ -37,6 +43,9 @@ class Sampler2D {
   }
 
  private:
+  constexpr Sampler2D(Addressing addressing, Filtering filtering)
+      : addressing(addressing), filtering(filtering) {}
+
   Addressing addressing = Addressing::Zero;
   Filtering filtering = Filtering::Linear;
 };

@@ -3,54 +3,55 @@
 
 #include "photophore/scene/sprite.hpp"
 
+using namespace Perimortem::Core;
+using namespace Photophore::Scene;
+
 // Sprite accessors keep the editable application model independent of frame
 // construction. Texture assignment retains shared Matrix identity while the
 // remaining properties are copied placement and ordering values.
-auto Photophore::Scene::Sprite::get_texture() const -> const Image::Texture2D& {
+auto Sprite::get_texture() const -> const Image::Texture2D& {
   return texture;
 }
 
-auto Photophore::Scene::Sprite::set_texture(const Image::Texture2D& texture)
-    -> void {
+auto Sprite::set_texture(const Image::Texture2D& texture) -> void {
   this->texture = texture;
 }
 
-auto Photophore::Scene::Sprite::get_size() const
-    -> Perimortem::Math::Size<U32, 2> {
+auto Sprite::get_size() const -> Math::Size<U32, 2> {
   return size;
 }
 
-auto Photophore::Scene::Sprite::set_size(Perimortem::Math::Size<U32, 2> size)
-    -> void {
+auto Sprite::set_size(Math::Size<U32, 2> size) -> void {
   this->size = size;
 }
 
-auto Photophore::Scene::Sprite::get_transform() const -> Transform2D {
+auto Sprite::get_transform() const -> Transform2D {
   return transform;
 }
 
-auto Photophore::Scene::Sprite::set_transform(Transform2D transform) -> void {
+auto Sprite::set_transform(Transform2D transform) -> void {
   this->transform = transform;
 }
 
-auto Photophore::Scene::Sprite::is_visible() const -> Bool {
+auto Sprite::is_visible() const -> Bool {
   return visible;
 }
 
-auto Photophore::Scene::Sprite::set_visible(Bool visible) -> void {
+auto Sprite::set_visible(Bool visible) -> void {
   this->visible = visible;
 }
 
-auto Photophore::Scene::Sprite::get_z_index() const -> S64 {
+auto Sprite::get_z_index() const -> S64 {
   return z_index;
 }
 
-auto Photophore::Scene::Sprite::set_z_index(S64 z_index) -> void {
+auto Sprite::set_z_index(S64 z_index) -> void {
   this->z_index = z_index;
 }
 
-auto Photophore::Scene::Sprite::is_drawable() const -> Bool {
-  // Collection needs one visible area backed by uploadable pixels. Keeping the
-  // predicate on Sprite gives callers the same admission rule for every frame.
+auto Sprite::is_drawable() const -> Bool {
+  // Frame collection requires a visible nonempty area and a Texture2D with at
+  // least one pixel. The predicate combines those independent authored values
+  // before a caller creates a Batch.
   return visible && !size.is_empty() && texture.is_drawable();
 }

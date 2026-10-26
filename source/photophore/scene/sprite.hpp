@@ -3,7 +3,8 @@
 
 #pragma once
 
-#include "perimortem/math/size.hpp"
+#include "perimortem/core/math/size.hpp"
+
 #include "photophore/image/texture_2d.hpp"
 #include "photophore/scene/transform_2d.hpp"
 
@@ -19,11 +20,12 @@ class Sprite {
   Sprite() = default;
 
   EXPORTED(PHOTOPHORE) auto get_texture() const -> const Image::Texture2D&;
-  EXPORTED(PHOTOPHORE)
-  auto set_texture(const Image::Texture2D& texture) -> void;
-  EXPORTED(PHOTOPHORE) auto get_size() const -> Perimortem::Math::Size<U32, 2>;
-  EXPORTED(PHOTOPHORE)
-  auto set_size(Perimortem::Math::Size<U32, 2> size) -> void;
+  EXPORTED(PHOTOPHORE) auto set_texture(const Image::Texture2D& texture)
+      -> void;
+  EXPORTED(PHOTOPHORE) auto get_size() const
+      -> Perimortem::Core::Math::Size<U32, 2>;
+  EXPORTED(PHOTOPHORE) auto set_size(Perimortem::Core::Math::Size<U32, 2> size)
+      -> void;
   EXPORTED(PHOTOPHORE) auto get_transform() const -> Transform2D;
   EXPORTED(PHOTOPHORE) auto set_transform(Transform2D transform) -> void;
   EXPORTED(PHOTOPHORE) auto is_visible() const -> Bool;
@@ -37,7 +39,7 @@ class Sprite {
   Bool visible = True;
   S64 z_index = 0;
   Image::Texture2D texture;
-  Perimortem::Math::Size<U32, 2> size;
+  Perimortem::Core::Math::Size<U32, 2> size;
 };
 
 }  // namespace Photophore::Scene

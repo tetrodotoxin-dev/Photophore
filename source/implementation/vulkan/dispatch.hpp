@@ -22,17 +22,22 @@ namespace Photophore::Vulkan {
 // extension and creation operation for its Presentation kind. The WebAssembly
 // implementation reports an unavailable native Vulkan path through these same
 // operations.
-auto acquire() -> Bool;
-auto release() -> void;
-auto symbol(Perimortem::Core::View::Bytes name) -> void*;
-auto surface_extension(Platform::Presentation::Kind kind) -> const char*;
-auto create_surface(
-    VkInstance instance,
-    Platform::Presentation presentation,
-    VkSurfaceKHR* surface) -> VkResult;
+class Dispatch {
+ public:
+  static auto acquire() -> Bool;
+  static auto release() -> void;
+  static auto symbol(Perimortem::Core::View::Bytes name) -> void*;
+  static auto surface_extension(Platform::Presentation::Kind kind) -> const
+      char*;
+  static auto create_surface(
+      VkInstance instance,
+      Platform::Presentation presentation,
+      VkSurfaceKHR* surface) -> VkResult;
 
-#define PHOTOPHORE_VULKAN(name) extern PFN_##name name;
+#define PHOTOPHORE_VULKAN(name) static PFN_##name name;
+
 #include "implementation/vulkan/functions.hpp"
 #undef PHOTOPHORE_VULKAN
+};
 
 }  // namespace Photophore::Vulkan

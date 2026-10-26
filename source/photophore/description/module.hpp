@@ -10,11 +10,11 @@
 
 namespace Photophore::Description {
 
-// Module lends one SPIR V binary and its shader stage to ShaderProgram. U32
-// words preserve the alignment required by Vulkan and give module creation an
-// exact byte extent. entry names the exported shader function, with an empty
-// view selecting `main`. The Program inventory supplies both borrowed
-// lifetimes.
+// Module references one SPIR V binary and its shader stage. U32 words preserve
+// the alignment required by Vulkan and give module creation an exact byte
+// extent. `entry` names the exported shader function, with an empty View
+// selecting `main`. Both Views remain accessible for the containing Program
+// access interval and are consumed synchronously by ShaderProgram creation.
 struct Module {
   Stage stage = Stage::Vertex;
   Perimortem::Core::View::Vector<U32> words;

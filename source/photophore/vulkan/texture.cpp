@@ -4,62 +4,67 @@
 #include "photophore/vulkan/texture.hpp"
 
 #include "perimortem/core/diagnostics/log.hpp"
-#include "perimortem/core/null_terminated.hpp"
+#include "perimortem/core/view/null_terminated.hpp"
 
-#include "photophore/image/sampler_2d.hpp"
 #include "implementation/vulkan/dispatch.hpp"
+#include "photophore/image/sampler_2d.hpp"
 
 using namespace Photophore::Vulkan;
+using namespace Perimortem::Core;
+using namespace Photophore::Image;
 
-static auto require_success(
-    VkResult result,
-    Perimortem::Core::View::Bytes message) -> void {
+static auto require_success(VkResult result, View::Bytes message) -> void {
   if (result != VK_SUCCESS) {
-    Perimortem::Core::Diagnostics::Log::fatal(message);
+    Diagnostics::Log::fatal(message);
   }
 }
 
-auto Photophore::Vulkan::Texture::create(
+auto Texture::create(
     const Context& context,
-    const Photophore::Image::Texture2D& resource,
+    const Texture2D& resource,
     VkImageView image_view,
     VkDescriptorSetLayout descriptor_set_layout) -> Texture {
   Texture texture;
+  if (image_view == VK_NULL_HANDLE || resource.is_empty()) {
+    return texture;
+  }
+
   texture.device = context.get_device();
-  BAIL_IF(image_view == VK_NULL_HANDLE || resource.is_empty());
 
   // Sampler2D is the application facing value for Vulkan filter and address
   // state. One conversion point keeps cache equality aligned with native state.
   VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
   VkFilter filter = VK_FILTER_LINEAR;
   switch (resource.get_sampler().get_filtering()) {
-  case Photophore::Image::Sampler2D::Filtering::Linear:
+  case Sampler2D::Filtering::Linear:
     filter = VK_FILTER_LINEAR;
     break;
-  case Photophore::Image::Sampler2D::Filtering::Nearest:
+  case Sampler2D::Filtering::Nearest:
     filter = VK_FILTER_NEAREST;
     break;
   }
+
   sampler_info.magFilter = filter;
   sampler_info.minFilter = filter;
 
   VkSamplerAddressMode address_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
   switch (resource.get_sampler().get_addressing()) {
-  case Photophore::Image::Sampler2D::Addressing::Zero:
+  case Sampler2D::Addressing::Zero:
     address_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
     break;
-  case Photophore::Image::Sampler2D::Addressing::Clamp:
+  case Sampler2D::Addressing::Clamp:
     address_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
     break;
-  case Photophore::Image::Sampler2D::Addressing::Wrap:
+  case Sampler2D::Addressing::Wrap:
     address_mode = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     break;
   }
+
   sampler_info.addressModeU = address_mode;
   sampler_info.addressModeV = address_mode;
   sampler_info.addressModeW = address_mode;
   require_success(
-      Photophore::Vulkan::vkCreateSampler(
+      Dispatch::vkCreateSampler(
           context.get_device(), &sampler_info, nullptr, &texture.sampler),
       "Vulkan: Failed to create texture sampler."_view);
 
@@ -69,41 +74,44 @@ auto Photophore::Vulkan::Texture::create(
   VkDescriptorPoolSize pool_size = {};
   pool_size.type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
   pool_size.descriptorCount = 1;
+
   VkDescriptorPoolCreateInfo pool_info = {
     VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO};
+
   pool_info.maxSets = 1;
   pool_info.poolSizeCount = 1;
   pool_info.pPoolSizes = &pool_size;
   require_success(
-      Photophore::Vulkan::vkCreateDescriptorPool(
+      Dispatch::vkCreateDescriptorPool(
           context.get_device(), &pool_info, nullptr, &texture.descriptor_pool),
       "Vulkan: Failed to create texture descriptor pool."_view);
 
   VkDescriptorSetAllocateInfo set_info = {
     VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO};
+
   set_info.descriptorPool = texture.descriptor_pool;
   set_info.descriptorSetCount = 1;
   set_info.pSetLayouts = &descriptor_set_layout;
   require_success(
-      Photophore::Vulkan::vkAllocateDescriptorSets(
+      Dispatch::vkAllocateDescriptorSets(
           context.get_device(), &set_info, &texture.descriptor_set),
       "Vulkan: Failed to allocate texture descriptor set."_view);
 
   VkDescriptorImageInfo descriptor = {};
-  // Binding zero matches the common layout created by Pipelines. The descriptor
-  // joins this sampler with the image view already transitioned for shader
-  // reads.
+  // Pipelines creates every sampled image layout with binding zero. The write
+  // stores this sampler and the image view in that binding. TextureImage has
+  // already transitioned the view to shader read layout before this call.
   descriptor.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
   descriptor.imageView = image_view;
   descriptor.sampler = texture.sampler;
+
   VkWriteDescriptorSet write = {VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET};
   write.dstSet = texture.descriptor_set;
   write.dstBinding = 0;
   write.descriptorCount = 1;
   write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
   write.pImageInfo = &descriptor;
-  Photophore::Vulkan::vkUpdateDescriptorSets(
-      context.get_device(), 1, &write, 0, nullptr);
+  Dispatch::vkUpdateDescriptorSets(context.get_device(), 1, &write, 0, nullptr);
   return texture;
 }
 
@@ -117,15 +125,15 @@ static auto release(
 
   // Destroying the pool releases its descriptor set before the sampler named
   // by that set, preserving their native reference order.
-  Photophore::Vulkan::vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
-  Photophore::Vulkan::vkDestroySampler(device, sampler, nullptr);
+  Dispatch::vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
+  Dispatch::vkDestroySampler(device, sampler, nullptr);
 }
 
-Photophore::Vulkan::Texture::~Texture() {
+Texture::~Texture() {
   release(device, descriptor_pool, sampler);
 }
 
-Photophore::Vulkan::Texture::Texture(Texture&& other) noexcept
+Texture::Texture(Texture&& other) noexcept
     : device(other.device),
       sampler(other.sampler),
       descriptor_pool(other.descriptor_pool),
@@ -133,8 +141,7 @@ Photophore::Vulkan::Texture::Texture(Texture&& other) noexcept
   other.device = VK_NULL_HANDLE;
 }
 
-auto Photophore::Vulkan::Texture::operator=(Texture&& other) noexcept
-    -> Texture& {
+auto Texture::operator=(Texture&& other) noexcept -> Texture& {
   if (this == &other) {
     return *this;
   }

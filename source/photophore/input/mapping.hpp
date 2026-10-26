@@ -3,16 +3,16 @@
 
 #pragma once
 
-#include "perimortem/core/static/vector.hpp"
+#include "perimortem/core/storage/vector.hpp"
 
 #include "photophore/input/key.hpp"
 
 namespace Photophore::Input {
 
-// Mapping is the policy that assigns each physical Key its application Key.
-// Several controls may share one destination, while None disables a source.
-// Resolution performs one translation step so mappings cannot form cycles or
-// make the meaning of a key depend on insertion order.
+// Mapping assigns each physical Key the Key observed by an application.
+// Several controls may share one destination, and None disables a source.
+// `resolve` performs exactly one lookup. A destination never becomes another
+// source, so mappings cannot form chains or cycles.
 class Mapping {
  public:
   constexpr Mapping() { reset(); }
@@ -56,7 +56,7 @@ class Mapping {
     return key != Key::None && is_key(key);
   }
 
-  Perimortem::Core::Static::Vector<Key, key_count> destinations;
+  Perimortem::Core::Storage::Vector<Key, key_count> destinations;
 };
 
 }  // namespace Photophore::Input

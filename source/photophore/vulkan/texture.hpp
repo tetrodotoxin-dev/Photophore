@@ -5,17 +5,17 @@
 
 #include <vulkan/vulkan.h>
 
-#include "perimortem/core/perimortem.hpp"
+#include "toolchain/toolchain.hpp"
 
 #include "photophore/image/texture_2d.hpp"
 #include "photophore/vulkan/context.hpp"
 
 namespace Photophore::Vulkan {
 
-// Texture owns the VkSampler and descriptor pool for one sampled Texture2D
-// realization. The pool contains exactly one descriptor set whose binding zero
-// refers to a TextureImage view. Separate Texture values allow one uploaded
-// matrix to use several Sampler2D policies.
+// Texture is the Vulkan sampling realization of one Texture2D. It contains a
+// VkSampler and a descriptor pool with exactly one set whose binding zero names
+// the supplied TextureImage view. Separate Texture values pair one uploaded
+// Matrix with different Sampler2D policies.
 //
 // Context's device and the supplied TextureImage view remain live through every
 // recorded use. Pipelines releases matching Texture values after their frame
@@ -33,7 +33,7 @@ class Texture {
   EXPORTED(PHOTOPHORE) Texture(Texture&&) noexcept;
   EXPORTED(PHOTOPHORE) auto operator=(Texture&&) noexcept -> Texture&;
   Texture(const Texture&) = delete;
-  auto operator=(const Texture&) = delete;
+  auto operator=(const Texture&) -> Texture& = delete;
 
   constexpr auto get_descriptor_set() const -> VkDescriptorSet {
     return descriptor_set;

@@ -6,17 +6,17 @@
 #include "perimortem/core/access/bytes.hpp"
 #include "perimortem/core/data.hpp"
 #include "perimortem/core/diagnostics/log.hpp"
-#include "perimortem/core/null_terminated.hpp"
+#include "perimortem/core/view/null_terminated.hpp"
 
 #include "implementation/vulkan/dispatch.hpp"
 
 using namespace Photophore::Vulkan;
+using namespace Perimortem::Core;
+using namespace Photophore::Image;
 
-static auto require_success(
-    VkResult result,
-    Perimortem::Core::View::Bytes message) -> void {
+static auto require_success(VkResult result, View::Bytes message) -> void {
   if (result != VK_SUCCESS) {
-    Perimortem::Core::Diagnostics::Log::fatal(message);
+    Diagnostics::Log::fatal(message);
   }
 }
 
@@ -30,15 +30,14 @@ static auto allocate_memory(
   info.allocationSize = requirements.size;
   info.memoryTypeIndex =
       context.find_memory_type(requirements.memoryTypeBits, properties);
-  if (info.memoryTypeIndex == UINT32_MAX) {
-    Perimortem::Core::Diagnostics::Log::fatal(
+  if (info.memoryTypeIndex == U32(-1)) {
+    Diagnostics::Log::fatal(
         "Vulkan: No compatible texture memory type found."_view);
   }
 
   VkDeviceMemory memory = VK_NULL_HANDLE;
   require_success(
-      Photophore::Vulkan::vkAllocateMemory(
-          context.get_device(), &info, nullptr, &memory),
+      Dispatch::vkAllocateMemory(context.get_device(), &info, nullptr, &memory),
       "Vulkan: Failed to allocate texture memory."_view);
   return memory;
 }
@@ -73,25 +72,26 @@ static auto transition_image_layout(
   VkDependencyInfo dependency = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
   dependency.imageMemoryBarrierCount = 1;
   dependency.pImageMemoryBarriers = &barrier;
-  Photophore::Vulkan::vkCmdPipelineBarrier2(command_buffer, &dependency);
+  Dispatch::vkCmdPipelineBarrier2(command_buffer, &dependency);
 }
 
-auto Photophore::Vulkan::TextureImage::create(
-    const Context& context,
-    const Photophore::Image::Texture2D& resource) -> TextureImage {
+auto TextureImage::create(const Context& context, const Texture2D& resource)
+    -> TextureImage {
   TextureImage texture;
+  if (!resource.is_drawable()) {
+    return texture;
+  }
+
   texture.device = context.get_device();
 
-  BAIL_IF(!resource.is_drawable());
   const auto& source_image = resource.get_image();
-  Perimortem::Core::View::Vector<Photophore::Image::Srgba8> pixels =
-      source_image.get_values();
+  View::Vector<Srgba8> pixels = source_image.get_view().get_values();
   const U32 width = source_image.get_column_count();
   const U32 height = source_image.get_row_count();
-  const VkDeviceSize image_size = VkDeviceSize(width) * height *
-                                  Photophore::Image::Srgba8::get_byte_count();
+  const VkDeviceSize image_size =
+      VkDeviceSize(width) * height * Srgba8::get_byte_count();
   if (width == 0 || height == 0 || resource.is_empty() ||
-      pixels.get_size() * sizeof(Photophore::Image::Srgba8) < image_size) {
+      pixels.get_size() * sizeof(Srgba8) < image_size) {
     return texture;
   }
 
@@ -104,37 +104,38 @@ auto Photophore::Vulkan::TextureImage::create(
 
   VkBuffer staging = VK_NULL_HANDLE;
   require_success(
-      Photophore::Vulkan::vkCreateBuffer(
+      Dispatch::vkCreateBuffer(
           context.get_device(), &buffer_info, nullptr, &staging),
       "Vulkan: Failed to create texture staging buffer."_view);
 
   VkMemoryRequirements staging_requirements = {};
-  Photophore::Vulkan::vkGetBufferMemoryRequirements(
+  Dispatch::vkGetBufferMemoryRequirements(
       context.get_device(), staging, &staging_requirements);
+
   constexpr VkMemoryPropertyFlags host_flags =
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
       VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
   VkDeviceMemory staging_memory =
       allocate_memory(context, staging_requirements, host_flags);
   require_success(
-      Photophore::Vulkan::vkBindBufferMemory(
+      Dispatch::vkBindBufferMemory(
           context.get_device(), staging, staging_memory, 0),
       "Vulkan: Failed to bind texture staging memory."_view);
 
   void* mapped = nullptr;
   require_success(
-      Photophore::Vulkan::vkMapMemory(
+      Dispatch::vkMapMemory(
           context.get_device(), staging_memory, 0, image_size, 0, &mapped),
       "Vulkan: Failed to map texture staging memory."_view);
-  Perimortem::Core::View::Bytes source_bytes(
-      Perimortem::Core::Data::cast<const U8>(pixels.get_data()),
-      Count(image_size));
-  Perimortem::Core::Access::Bytes destination_bytes(
-      Perimortem::Core::Data::cast<U8>(mapped), Count(image_size));
+
+  View::Bytes source_bytes(
+      *Data::cast<const U8>(pixels.get_data()), Count(image_size));
+  Access::Bytes destination_bytes(*Data::cast<U8>(mapped), Count(image_size));
   for (Count index = 0; index < source_bytes.get_size(); index++) {
     destination_bytes.get_data()[index] = source_bytes[index];
   }
-  Photophore::Vulkan::vkUnmapMemory(context.get_device(), staging_memory);
+
+  Dispatch::vkUnmapMemory(context.get_device(), staging_memory);
 
   VkImageCreateInfo image_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
   image_info.imageType = VK_IMAGE_TYPE_2D;
@@ -148,17 +149,17 @@ auto Photophore::Vulkan::TextureImage::create(
       VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
   image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   require_success(
-      Photophore::Vulkan::vkCreateImage(
+      Dispatch::vkCreateImage(
           context.get_device(), &image_info, nullptr, &texture.image),
       "Vulkan: Failed to create texture image."_view);
 
   VkMemoryRequirements image_requirements = {};
-  Photophore::Vulkan::vkGetImageMemoryRequirements(
+  Dispatch::vkGetImageMemoryRequirements(
       context.get_device(), texture.image, &image_requirements);
   texture.memory = allocate_memory(
       context, image_requirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
   require_success(
-      Photophore::Vulkan::vkBindImageMemory(
+      Dispatch::vkBindImageMemory(
           context.get_device(), texture.image, texture.memory, 0),
       "Vulkan: Failed to bind texture image memory."_view);
 
@@ -168,11 +169,12 @@ auto Photophore::Vulkan::TextureImage::create(
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_PIPELINE_STAGE_2_TOP_OF_PIPE_BIT,
       VkAccessFlags2(0), VK_PIPELINE_STAGE_2_TRANSFER_BIT,
       VK_ACCESS_2_TRANSFER_WRITE_BIT);
+
   VkBufferImageCopy region = {};
   region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   region.imageSubresource.layerCount = 1;
   region.imageExtent = {width, height, 1};
-  Photophore::Vulkan::vkCmdCopyBufferToImage(
+  Dispatch::vkCmdCopyBufferToImage(
       command_buffer, staging, texture.image,
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
   transition_image_layout(
@@ -180,13 +182,13 @@ auto Photophore::Vulkan::TextureImage::create(
       VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL,
       VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT,
       VK_PIPELINE_STAGE_2_FRAGMENT_SHADER_BIT, VK_ACCESS_2_SHADER_READ_BIT);
-  // Immediate submission completes the transfer and shader read transition.
-  // Its return establishes both staging retirement and sampled view creation.
+  // Immediate submission waits for the copy and shader read transition. After
+  // it returns, the staging buffer is no longer referenced and the image can be
+  // published through a sampled view.
   context.submit_immediate_commands(command_buffer);
 
-  Photophore::Vulkan::vkDestroyBuffer(context.get_device(), staging, nullptr);
-  Photophore::Vulkan::vkFreeMemory(
-      context.get_device(), staging_memory, nullptr);
+  Dispatch::vkDestroyBuffer(context.get_device(), staging, nullptr);
+  Dispatch::vkFreeMemory(context.get_device(), staging_memory, nullptr);
 
   VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
   view_info.image = texture.image;
@@ -196,7 +198,7 @@ auto Photophore::Vulkan::TextureImage::create(
   view_info.subresourceRange.levelCount = 1;
   view_info.subresourceRange.layerCount = 1;
   require_success(
-      Photophore::Vulkan::vkCreateImageView(
+      Dispatch::vkCreateImageView(
           context.get_device(), &view_info, nullptr, &texture.image_view),
       "Vulkan: Failed to create texture image view."_view);
   return texture;
@@ -211,18 +213,19 @@ static auto release(
     return;
   }
 
-  // The view refers to the image, and the image binds the allocation. Releasing
-  // them in that dependency order mirrors successful creation.
-  Photophore::Vulkan::vkDestroyImageView(device, image_view, nullptr);
-  Photophore::Vulkan::vkDestroyImage(device, image, nullptr);
-  Photophore::Vulkan::vkFreeMemory(device, memory, nullptr);
+  // The view refers to the image, and the image binds the device memory.
+  // Destruction therefore releases the view first, then the image, then its
+  // allocation.
+  Dispatch::vkDestroyImageView(device, image_view, nullptr);
+  Dispatch::vkDestroyImage(device, image, nullptr);
+  Dispatch::vkFreeMemory(device, memory, nullptr);
 }
 
-Photophore::Vulkan::TextureImage::~TextureImage() {
+TextureImage::~TextureImage() {
   release(device, image, memory, image_view);
 }
 
-Photophore::Vulkan::TextureImage::TextureImage(TextureImage&& other) noexcept
+TextureImage::TextureImage(TextureImage&& other) noexcept
     : device(other.device),
       image(other.image),
       memory(other.memory),
@@ -230,8 +233,7 @@ Photophore::Vulkan::TextureImage::TextureImage(TextureImage&& other) noexcept
   other.device = VK_NULL_HANDLE;
 }
 
-auto Photophore::Vulkan::TextureImage::operator=(TextureImage&& other) noexcept
-    -> TextureImage& {
+auto TextureImage::operator=(TextureImage&& other) noexcept -> TextureImage& {
   if (this == &other) {
     return *this;
   }

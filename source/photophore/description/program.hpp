@@ -18,14 +18,13 @@ namespace Photophore::Description {
 // those modules consume. Frame::Batch selects this product through locator and
 // supplies its changing resources, placement and parameter bytes.
 //
-// The caller lends every nested array, name and module for the lifetime of the
-// Pipelines instance that receives this Program. locator is a stable address
-// identity shared with Frame::Program and is unique within that inventory.
-// Pipelines compares the address as a token while the referenced byte remains
-// ordinary caller storage.
+// Every nested array, name and module remains accessible while a Pipelines
+// instance uses this Program. `locator` is a stable address token shared with
+// Frame::Program and is unique within one inventory. Pipelines compares that
+// address and never reads the referenced byte.
 //
-// host_size covers the complete push input block. parameters_offset and
-// parameters_size locate the contiguous region copied from each batch, while
+// `host_size` covers the complete push input block. `parameters_offset` and
+// `parameters_size` locate the contiguous region copied from each batch, while
 // HostField entries fill placement values around that region. HostInputRange
 // entries publish the stage visibility expected by the compiled modules.
 struct Program {

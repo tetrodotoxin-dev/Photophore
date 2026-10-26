@@ -14,9 +14,9 @@ namespace Photophore::Description {
 // select the affine rows derived from its placement and framebuffer extent.
 // Each transform row occupies four R32 values.
 //
-// name preserves borrowed reflection data for diagnostics. Pipelines fills the
-// block from role, offset and size, giving compiled layout facts authority over
-// a producer's naming convention.
+// The `name` View follows the containing Program access interval and is used
+// for diagnostics. Pipelines fills the block from `role`, `offset` and `size`,
+// so the compiled layout determines placement independently of authored names.
 struct HostField {
   Perimortem::Core::View::Bytes name;
   Count offset = 0;

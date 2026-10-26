@@ -3,12 +3,12 @@
 
 #pragma once
 
-#include "perimortem/core/perimortem.hpp"
+#include "toolchain/toolchain.hpp"
 
 namespace Photophore::Image {
 
 // Srgba8 stores one sRGB color and linear alpha in red, green, blue, alpha
-// byte order. The color channels contain sRGB encoded samples; alpha contains
+// byte order. The color channels contain sRGB encoded samples. Alpha contains
 // coverage and receives no transfer function. Construction preserves the
 // supplied samples without performing color conversion. A producer converting
 // another image format therefore establishes that its color values use sRGB.

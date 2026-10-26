@@ -3,8 +3,8 @@
 
 #pragma once
 
+#include "perimortem/core/storage/vector.hpp"
 #include "perimortem/core/view/vector.hpp"
-#include "perimortem/core/static/vector.hpp"
 
 #include "photophore/input/key.hpp"
 #include "photophore/input/mapping.hpp"
@@ -44,7 +44,7 @@ class Snapshot {
  private:
   static constexpr Count word_bits = sizeof(U64) * 8;
   static constexpr Count word_count = (key_count + word_bits - 1) / word_bits;
-  using KeyBits = Perimortem::Core::Static::Vector<U64, word_count>;
+  using KeyBits = Perimortem::Core::Storage::Vector<U64, word_count>;
 
   constexpr Snapshot(KeyBits current, KeyBits changed, Pointer pointer)
       : current(current), changed(changed), pointer(pointer) {}

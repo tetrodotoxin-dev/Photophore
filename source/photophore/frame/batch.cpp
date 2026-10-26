@@ -5,22 +5,26 @@
 
 #include "perimortem/core/data.hpp"
 
+using namespace Perimortem::Core;
+using namespace Perimortem::Memory;
+using namespace Photophore::Frame;
+
 // Construction captures one draw observation. Moving resources and parameter
 // bytes makes their lifetime exactly the Batch lifetime while placement and
 // ordering remain inexpensive copied values.
-Photophore::Frame::Batch::Batch(
+Batch::Batch(
     Program program,
-    Perimortem::Memory::Dynamic::Vector<Image::Texture2D>&& resources,
-    Perimortem::Memory::Dynamic::Bytes&& inputs,
+    Thread::Vector<Image::Texture2D>&& resources,
+    Thread::Bytes&& inputs,
     Transform transform,
-    Perimortem::Math::Size<U32, 2> size_pixels,
+    Math::Size<U32, 2> size_pixels,
     Pipeline pipeline,
     Count vertex_count,
     S64 z_index,
     Count authored_order)
     : program(program),
-      resources(Perimortem::Core::Data::take(resources)),
-      inputs(Perimortem::Core::Data::take(inputs)),
+      resources(Data::take(resources)),
+      inputs(Data::take(inputs)),
       transform(transform),
       size_pixels(size_pixels),
       pipeline(pipeline),
@@ -28,7 +32,6 @@ Photophore::Frame::Batch::Batch(
       z_index(z_index),
       authored_order(authored_order) {}
 
-auto Photophore::Frame::Batch::get_inputs() const
-    -> Perimortem::Core::View::Bytes {
+auto Batch::get_inputs() const -> View::Bytes {
   return inputs.get_view();
 }

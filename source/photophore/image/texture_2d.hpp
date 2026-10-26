@@ -3,14 +3,13 @@
 
 #pragma once
 
-#include "perimortem/core/static/vector.hpp"
 #include "perimortem/core/data.hpp"
-#include "perimortem/core/option.hpp"
-
+#include "perimortem/core/math/size.hpp"
+#include "perimortem/core/storage/option.hpp"
+#include "perimortem/core/storage/vector.hpp"
 #include "perimortem/memory/dynamic/record.hpp"
 #include "perimortem/memory/matrix.hpp"
 
-#include "perimortem/math/size.hpp"
 #include "photophore/image/sampler_2d.hpp"
 #include "photophore/image/srgba8.hpp"
 
@@ -29,9 +28,13 @@ namespace Photophore::Image {
 class Texture2D {
  public:
   Texture2D() = default;
+
+  // Construction allocates one shared Record and moves the source Matrix into
+  // it. Explicit construction keeps both the allocation and source state
+  // change visible at the call site.
   explicit Texture2D(
       Perimortem::Memory::Matrix<Srgba8>&& image,
-      Sampler2D sampler = Sampler2D())
+      Sampler2D sampler = Sampler2D::create())
       : image(
             Perimortem::Memory::Dynamic::Record<
                 Perimortem::Memory::Matrix<Srgba8>>(
@@ -43,19 +46,30 @@ class Texture2D {
 
   // The returned Matrix remains valid while this Texture2D remains accessible.
   auto get_image() const -> const Perimortem::Memory::Matrix<Srgba8>& {
-    return **image;
+    auto selected =
+        [](const auto& record) -> const Perimortem::Memory::Matrix<Srgba8>& {
+      return *record;
+    };
+
+    auto unreachable = []() -> const Perimortem::Memory::Matrix<Srgba8>& {
+      __builtin_unreachable();
+    };
+
+    return image.visit(selected, unreachable);
   }
+
   constexpr auto get_sampler() const -> Sampler2D { return sampler; }
-  auto get_size_pixels() const -> Perimortem::Math::Size<U32, 2> {
+  auto get_size_pixels() const -> Perimortem::Core::Math::Size<U32, 2> {
     if (!image) {
       return {};
     }
 
-    Perimortem::Core::Static::Vector<U32, 2> dimensions = {{
+    Perimortem::Core::Storage::Vector<U32, 2> dimensions = {{
       get_image().get_column_count(),
       get_image().get_row_count(),
     }};
-    return Perimortem::Math::Size<U32, 2>(dimensions);
+
+    return Perimortem::Core::Math::Size<U32, 2>(dimensions);
   }
 
   auto is_empty() const -> Bool { return !image; }
@@ -67,14 +81,16 @@ class Texture2D {
   }
 
   auto get_reservations() const -> Count {
-    return image ? image->get_reservations() : 0;
+    auto count = [](const auto& record) { return record.get_reservations(); };
+    auto empty = [] { return Count(0); };
+    return image.visit(count, empty);
   }
 
  private:
-  Perimortem::Core::Option<
+  Perimortem::Core::Storage::Option<
       Perimortem::Memory::Dynamic::Record<Perimortem::Memory::Matrix<Srgba8>>>
       image;
-  Sampler2D sampler;
+  Sampler2D sampler = Sampler2D::create();
 };
 
 }  // namespace Photophore::Image

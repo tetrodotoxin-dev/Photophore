@@ -3,15 +3,15 @@
 
 #pragma once
 
-#include "perimortem/core/perimortem.hpp"
+#include "toolchain/toolchain.hpp"
 
 namespace Photophore::Input {
 
-// Key names physical controls independently of a native event protocol or
-// keyboard text layout. Platform adapters translate host codes into this
+// Key names physical controls independently of a window implementation or
+// keyboard text layout. Platform event adapters translate host codes into this
 // vocabulary before Mapping assigns application controls. Left and right
-// modifiers remain distinct, while the aggregate modifier keys let consumers
-// ask the common question after mapping.
+// modifiers remain distinct. Aggregate modifier keys record their combined
+// state after mapping.
 enum class Key : U8 {
   None,
 

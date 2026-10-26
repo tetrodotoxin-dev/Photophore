@@ -18,5 +18,8 @@ cc_binary(
         "program.hpp",
     ],
     data = glob(["shaders/*.glsl"]),
-    deps = ["//:vulkan"],
+    deps = [
+        "//:vulkan",
+        "@perimortem//:serialization",
+    ],
 )

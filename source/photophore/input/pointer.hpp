@@ -3,13 +3,14 @@
 
 #pragma once
 
-#include "perimortem/core/perimortem.hpp"
+#include "toolchain/toolchain.hpp"
 
 namespace Photophore::Input {
 
-// Pointer is one surface-local pointer observation. Position names the latest
-// focused location. Motion and scroll accumulate between Snapshots, giving a
-// consumer one stable value independently of the number of native events.
+// Pointer records one window relative position together with the motion and
+// scroll accumulated since the previous Snapshot. An inactive value marks an
+// interval without pointer focus. The next focused Snapshot starts with zero
+// motion because no earlier position belongs to that interval.
 struct Pointer {
   R32 x = 0;
   R32 y = 0;

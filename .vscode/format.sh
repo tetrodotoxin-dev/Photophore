@@ -11,4 +11,4 @@ fi
 
 repository="$(git -C "$(dirname "${BASH_SOURCE[0]}")" rev-parse --show-toplevel)"
 cd "$repository"
-clang-format -i -- "$@"
+bazel run :format -- "$@"

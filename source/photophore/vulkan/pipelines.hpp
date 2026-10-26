@@ -6,8 +6,7 @@
 #include <vulkan/vulkan.h>
 
 #include "perimortem/core/view/vector.hpp"
-
-#include "perimortem/memory/dynamic/vector.hpp"
+#include "perimortem/memory/thread/vector.hpp"
 
 #include "photophore/description/program.hpp"
 #include "photophore/frame/batch.hpp"
@@ -20,35 +19,36 @@
 
 namespace Photophore::Vulkan {
 
-// Pipelines turns ordered Frame::Batch values into Vulkan draw commands. It
-// realizes each admitted Description::Program and fixed Frame::Pipeline once,
-// uploads each shared pixel matrix once, and realizes each matrix plus
-// Sampler2D pair as one descriptor set. These caches keep native setup work out
-// of repeated frame recording.
+// Pipelines records ordered Frame::Batch values as Vulkan draw commands. It
+// creates each validated Description::Program and fixed Frame::Pipeline pair
+// once, uploads each shared pixel Matrix once, and creates one descriptor set
+// for each Matrix and Sampler2D pair. Later frames reuse those native objects.
 //
-// Construction borrows a live Context and the complete Program inventory,
-// including every nested view and name. Renderer and that inventory remain live
-// through the Pipelines lifetime. Each locator is stable and unique within the
-// inventory. rebuild replaces shader realizations after a swapchain color
+// Construction stores references to a live Context and the complete Program
+// inventory, including every nested View and name. Both remain accessible until
+// Pipelines destruction. Each locator has a stable, unique address within the
+// inventory. `rebuild` replaces shader realizations after a swapchain color
 // format change while preserving uploaded images and descriptor sets.
 //
-// The admitted profile uses a unit quad, triangle list, source alpha blending,
+// The supported profile uses a unit quad, triangle list, source alpha blending,
 // one host input range and sampled textures at slot zero in distinct sets.
-// Description contract violations use the fatal diagnostic path. record
-// returns False when a batch falls outside that admitted profile and borrows
-// batches only for the call.
+// Construction treats an invalid Description as a fatal authored-program error.
+// `record` returns False when a Batch falls outside the profile. Batch Views
+// need remain accessible only until that call returns.
 //
 // Each ImageEntry remembers the Renderer frame fence and generation of its
 // latest draw. Cache retirement combines completed GPU use with the shared
 // matrix reservation count, allowing inactive textures to leave the cache
 // while current submissions continue on the queue.
 class Pipelines {
+  using Descriptions = Perimortem::Core::View::Vector<Description::Program>;
+  using Batches = Perimortem::Core::View::Vector<Frame::Batch>;
+
  public:
-  EXPORTED(PHOTOPHORE)
-  Pipelines(
+  EXPORTED(PHOTOPHORE) Pipelines(
       const Context& context,
       VkFormat color_format,
-      Perimortem::Core::View::Vector<Description::Program> descriptions);
+      Descriptions descriptions);
   EXPORTED(PHOTOPHORE) ~Pipelines();
   Pipelines(const Pipelines&) = delete;
   Pipelines(Pipelines&&) = delete;
@@ -56,14 +56,14 @@ class Pipelines {
   auto operator=(Pipelines&&) -> Pipelines& = delete;
 
   EXPORTED(PHOTOPHORE) auto rebuild(VkFormat color_format) -> void;
-  EXPORTED(PHOTOPHORE)
-  auto record(
+  EXPORTED(PHOTOPHORE) auto record(
       const Renderer::Frame& frame,
-      Perimortem::Core::View::Vector<Photophore::Frame::Batch> batches) -> Bool;
+      Batches batches) -> Bool;
 
  private:
   struct ImageEntry {
-    // One pixel matrix upload shared by every sampler realization.
+    // Stores one pixel Matrix upload and the latest frame use that controls its
+    // destruction.
     Image::Texture2D resource;
     TextureImage image;
     VkFence completion = VK_NULL_HANDLE;
@@ -72,27 +72,27 @@ class Pipelines {
   };
 
   struct TextureEntry {
-    // One descriptor and sampler for an admitted Texture2D value.
+    // Stores one descriptor set and sampler for an accepted Texture2D value.
     Image::Texture2D resource;
     Texture texture;
   };
 
   struct ProgramEntry {
-    // One VkPipeline selected by Program identity and fixed draw state.
+    // Stores one VkPipeline selected by Program address and fixed draw state.
     const Description::Program* description = nullptr;
     Frame::Pipeline pipeline;
     ShaderProgram shader;
   };
 
   const Context& context;
-  Perimortem::Core::View::Vector<Description::Program> descriptions;
+  Descriptions descriptions;
   VkFormat color_format = VK_FORMAT_UNDEFINED;
   VkDescriptorSetLayout descriptor_layout = VK_NULL_HANDLE;
   VkBuffer vertex_buffer = VK_NULL_HANDLE;
   VkDeviceMemory vertex_memory = VK_NULL_HANDLE;
-  Perimortem::Memory::Dynamic::Vector<ProgramEntry> realizations;
-  Perimortem::Memory::Dynamic::Vector<ImageEntry> images;
-  Perimortem::Memory::Dynamic::Vector<TextureEntry> textures;
+  Perimortem::Memory::Thread::Vector<ProgramEntry> realizations;
+  Perimortem::Memory::Thread::Vector<ImageEntry> images;
+  Perimortem::Memory::Thread::Vector<TextureEntry> textures;
 };
 
 }  // namespace Photophore::Vulkan

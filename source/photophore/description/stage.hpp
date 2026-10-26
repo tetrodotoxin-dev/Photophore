@@ -3,13 +3,13 @@
 
 #pragma once
 
-#include "perimortem/core/perimortem.hpp"
+#include "toolchain/toolchain.hpp"
 
 namespace Photophore::Description {
 
-// Stage identifies where a Module executes and which shaders can observe a
-// HostInputRange. ShaderProgram performs the Vulkan flag conversion while this
-// description stays independent of native numeric values.
+// Stage identifies the shader execution stage of a Module and the stages that
+// can read a HostInputRange. Vertex and Pixel remain independent of Vulkan
+// numeric flags. ShaderProgram converts each value when creating a pipeline.
 enum class Stage : U32 {
   Vertex,
   Pixel,

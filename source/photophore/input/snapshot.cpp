@@ -45,8 +45,8 @@ auto Snapshot::add_modifier_groups(KeyBits& keys) -> void {
 auto Snapshot::collect(View::Vector<Key> keys, const Mapping& mapping)
     -> KeyBits {
   KeyBits output;
-  for (const Key physical : keys) {
-    set(output, mapping.resolve(physical));
+  for (Count index = 0; index < keys.get_size(); index++) {
+    set(output, mapping.resolve(keys[index]));
   }
 
   add_modifier_groups(output);

@@ -3,17 +3,17 @@
 
 #pragma once
 
-#include "perimortem/core/perimortem.hpp"
+#include "toolchain/toolchain.hpp"
 
 namespace Photophore::Frame {
 
-// Program carries the address identity of one Description::Program into a
-// Frame::Batch. Pipelines compares that token with its borrowed inventory and
-// uses the matching description to realize the draw. The caller keeps the
-// locator stable for every inventory and batch that shares it.
+// Program carries the address token of one Description::Program into a
+// Frame::Batch. Pipelines compares that token with its description inventory
+// and uses the matching record to realize the draw. The caller keeps the token
+// storage at a stable address while the inventory and its batches are used.
 //
-// The pointed byte serves only as identity. Description admission establishes
-// the shader and layout agreement associated with that address.
+// The pointed byte is never read. Description validation establishes the shader
+// and layout agreement associated with the address.
 class Program {
  public:
   constexpr Program() = default;

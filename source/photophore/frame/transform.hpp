@@ -3,20 +3,20 @@
 
 #pragma once
 
-#include "perimortem/core/perimortem.hpp"
+#include "toolchain/toolchain.hpp"
 
 namespace Photophore::Frame {
 
 // Transform is the affine placement captured by a Frame::Batch. For input
 // coordinates (u, v), its rows produce xx*u + xy*v + x and
-// yx*u + yy*v + y. create applies scale, then rotation in radians, then
+// yx*u + yy*v + y. `create` applies scale, then rotation in radians, then
 // translation.
 //
 // Pipelines interprets the result in framebuffer pixels with zero at the top
 // left. Positive X points right and positive Y points down, making negative Y
 // the upward direction.
 //
-// compose applies local placement first and parent placement second. The
+// `compose` applies local placement first and parent placement second. The
 // resulting coefficients are copied into the batch so each submitted draw
 // preserves the placement observed during collection.
 class Transform {
@@ -30,9 +30,9 @@ class Transform {
       R64 scale_y,
       R64 rotation) -> Transform;
 
-  static EXPORTED(
-      PHOTOPHORE) auto compose(const Transform& parent, const Transform& local)
-      -> Transform;
+  static EXPORTED(PHOTOPHORE) auto compose(
+      const Transform& parent,
+      const Transform& local) -> Transform;
 
   constexpr auto get_xx() const -> R64 { return xx; }
   constexpr auto get_xy() const -> R64 { return xy; }

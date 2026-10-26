@@ -3,15 +3,15 @@
 
 #pragma once
 
-#include "perimortem/core/perimortem.hpp"
+#include "toolchain/toolchain.hpp"
 
 namespace Photophore::Platform {
 
-// Presentation is the borrowed native surface input consumed by Context. Kind
-// selects the matching platform implementation, while host and surface carry
-// its two native handles. Wayland supplies wl_display and wl_surface. Win32
-// supplies HINSTANCE and HWND. This common record keeps those platform headers
-// outside application facing rendering interfaces.
+// Presentation identifies the native window surface used to create a rendering
+// target. Kind selects the matching platform representation. Wayland publishes
+// its display and surface handles, while Win32 publishes its module and window
+// handles. The record keeps native declarations outside the public Window and
+// renderer headers.
 //
 // Window supplies the lifetime of both handles and remains live through the
 // Vulkan surface created from them. Copies preserve the same borrowed handles.

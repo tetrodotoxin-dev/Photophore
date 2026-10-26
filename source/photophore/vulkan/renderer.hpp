@@ -5,35 +5,33 @@
 
 #include <vulkan/vulkan.h>
 
-#include "perimortem/core/static/vector.hpp"
+#include "perimortem/core/storage/vector.hpp"
 
 #include "photophore/vulkan/context.hpp"
 #include "photophore/vulkan/swapchain.hpp"
 
 namespace Photophore::Vulkan {
 
-// Renderer owns the Context, Swapchain and synchronization state used to
-// present one native Window. Two rotating frame slots provide command buffers,
-// acquisition semaphores and submission fences. A separate presentation slot
-// follows each swapchain image because acquisition order and frame order are
-// independent.
+// Renderer controls Vulkan frame acquisition, command submission and
+// presentation for one Window. It stores the Context, Swapchain and two
+// rotating command slots. Presentation synchronization follows swapchain image
+// indices because acquisition order is independent of frame slot order.
 //
-// A successful begin_frame lends one Frame for immediate command recording.
-// end_frame submits and presents that exact value. Pipelines records draws
-// between those calls and borrows the Context plus frame completion data from
-// Renderer. All three operations run on one calling thread, preserving the
-// order of fence generations and borrowed command state.
+// A successful `begin_frame` fills one Frame for immediate command recording.
+// `end_frame` submits and presents that exact value. Pipelines reads the
+// Context and frame completion data between those calls. All three operations
+// run on one calling thread, preserving command order and fence generations.
 //
-// False from begin_frame reports suspension, unavailable presentation or a
-// swapchain recreation request before command recording begins. resize and
-// wait_idle settle both queue submissions and presentation fences. The second
-// fence set proves when the presentation engine has released its semaphore and
-// swapchain references.
+// False from `begin_frame` reports suspension, unavailable presentation or a
+// swapchain recreation request before recording begins. `resize` and
+// `wait_idle` settle both queue submissions and presentation fences. The second
+// fence set marks when the presentation engine has finished with its semaphore
+// and swapchain references.
 class Renderer {
  public:
   // Frame identifies both rotating command storage and the independently
-  // acquired swapchain image. completion is signaled by this submission, and
-  // completion_generation advances after the previous signal has been
+  // acquired swapchain image. `completion` is signaled by this submission, and
+  // `completion_generation` advances after the previous signal has been
   // observed. Pipelines records both values with each used image so fence reuse
   // remains distinguishable from completion of the earlier frame.
   struct Frame {
@@ -46,8 +44,7 @@ class Renderer {
     U32 image_index = 0;
   };
 
-  EXPORTED(PHOTOPHORE)
-  Renderer(
+  EXPORTED(PHOTOPHORE) Renderer(
       Photophore::Platform::Presentation presentation,
       U32 width,
       U32 height);
@@ -86,8 +83,8 @@ class Renderer {
 
   Context context;
   Swapchain swapchain;
-  Perimortem::Core::Static::Vector<FrameState, frames_in_flight> frames;
-  Perimortem::Core::Static::Vector<PresentationState, Swapchain::max_images>
+  Perimortem::Core::Storage::Vector<FrameState, frames_in_flight> frames;
+  Perimortem::Core::Storage::Vector<PresentationState, Swapchain::max_images>
       presentations;
   Count current_frame = 0;
   Bool suspended = False;

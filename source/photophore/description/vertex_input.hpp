@@ -3,15 +3,16 @@
 
 #pragma once
 
-#include "perimortem/core/perimortem.hpp"
+#include "toolchain/toolchain.hpp"
 
 namespace Photophore::Description {
 
 // VertexInput describes one R32 scalar or vector in an interleaved vertex
-// record. location selects the shader input, offset measures bytes from the
+// record. `location` selects the shader input, `offset` measures bytes from the
 // record start, and every entry shares the stride of binding zero.
-// ShaderProgram maps one through four components to Vulkan formats. Pipelines
-// admits the two entries matching its position and texture coordinate quad.
+// ShaderProgram maps one through four components to Vulkan formats. The current
+// Pipelines realization accepts the position and texture coordinate entries of
+// its unit quad.
 struct VertexInput {
   Count location = 0;
   Count components = 0;

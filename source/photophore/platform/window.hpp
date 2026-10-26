@@ -3,16 +3,16 @@
 
 #pragma once
 
-#include "photophore/platform/input.hpp"
+#include "photophore/platform/collector.hpp"
 #include "photophore/platform/presentation.hpp"
 
 namespace Photophore::Platform {
 
-// Window owns one native toplevel, its connection and the Input accumulator
-// filled by host callbacks. Its implementation keeps one creation, polling,
-// surface publication and destruction model, with target branches providing
-// the available native operations. EventStatus reports ready, ordinary close
-// and platform failure as distinct outcomes.
+// Window manages one native top level surface and publishes its size, input
+// Snapshots and Presentation. Construction opens the host connection and
+// creates the surface. `poll_events` advances native callbacks and replaces the
+// stored input observation. EventStatus distinguishes normal operation, a user
+// close request and a platform failure.
 //
 // Dimensions and pointer positions share client coordinates. Multiplying by
 // scale gives framebuffer dimensions. Wayland supplies an integer buffer scale,
@@ -20,10 +20,10 @@ namespace Photophore::Platform {
 // change sets needs_resize until the caller has handled it and calls
 // clear_resize.
 //
-// Native callbacks retain the Window address, establishing one immovable value
-// used by a single thread through creation, polling and destruction.
-// Presentation lends its handles to Context, so Renderer and its Vulkan surface
-// end before Window destruction.
+// Native callbacks store the Window address. The value therefore remains at one
+// address and on one thread from construction through destruction. Handles in
+// Presentation remain accessible until Window destruction, so a Renderer made
+// from them ends first.
 class Window {
  public:
   // EventStatus keeps an ordinary compositor close separate from a platform
@@ -54,18 +54,17 @@ class Window {
   // A completed poll replaces the stored input Snapshot. `get_input` returns a
   // reference that remains valid through the next poll, while copying it
   // preserves that observation. Mapping changes apply to the next Snapshot.
-  EXPORTED(PHOTOPHORE)
-  auto get_input() const -> const Photophore::Input::Snapshot&;
-  EXPORTED(PHOTOPHORE)
-  auto get_input_mapping() -> Photophore::Input::Mapping&;
-  EXPORTED(PHOTOPHORE)
-  auto get_input_mapping() const -> const Photophore::Input::Mapping&;
+  EXPORTED(PHOTOPHORE) auto get_input() const
+      -> const Photophore::Input::Snapshot&;
+  EXPORTED(PHOTOPHORE) auto get_input_mapping() -> Photophore::Input::Mapping&;
+  EXPORTED(PHOTOPHORE) auto get_input_mapping() const
+      -> const Photophore::Input::Mapping&;
 
-  EXPORTED(PHOTOPHORE)
-  auto get_presentation() const -> Photophore::Platform::Presentation;
+  EXPORTED(PHOTOPHORE) auto get_presentation() const
+      -> Photophore::Platform::Presentation;
 
  private:
-  Input input_collector;
+  Collector input_collector;
   Photophore::Input::Mapping input_mapping;
   Photophore::Input::Snapshot input_snapshot;
   void* native = nullptr;
