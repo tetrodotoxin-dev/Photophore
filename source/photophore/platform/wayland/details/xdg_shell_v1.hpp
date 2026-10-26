@@ -11,9 +11,9 @@
 
 #include "perimortem/core/view/bytes.hpp"
 
-#include "photophore/platform/wayland/client.hpp"
+#include "photophore/platform/wayland/details/client.hpp"
 
-namespace Photophore::Platform::Wayland::XdgShellV1 {
+namespace Photophore::Platform::Wayland::Details::XdgShellV1 {
 
 // XdgShellV1 is Photophore's private binding for the stable xdg-shell version
 // one wire contract. Its source controlled message tables fix the supported
@@ -38,6 +38,6 @@ auto set_application(
     Perimortem::Core::View::Bytes application) -> Bool;
 auto destroy(ABI::Proxy* proxy) -> void;
 
-}  // namespace Photophore::Platform::Wayland::XdgShellV1
+}  // namespace Photophore::Platform::Wayland::Details::XdgShellV1
 
 #endif

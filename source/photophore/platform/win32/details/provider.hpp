@@ -16,7 +16,7 @@
 
 #include "photophore/platform/window.hpp"
 
-namespace Photophore::Platform::Win32 {
+namespace Photophore::Platform::Win32::Details {
 
 // Provider supplies the Windows operations for one public Window. Its
 // stable allocation is stored in GWLP_USERDATA and owns the HWND and shared
@@ -43,6 +43,6 @@ class Provider final : public Window::Provider {
   Bool class_acquired = False;
 };
 
-}  // namespace Photophore::Platform::Win32
+}  // namespace Photophore::Platform::Win32::Details
 
 #endif

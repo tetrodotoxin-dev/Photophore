@@ -9,9 +9,9 @@
 
 #ifdef TOOLCHAIN_LINUX
 
-#include "photophore/platform/wayland/abi.hpp"
+#include "photophore/platform/wayland/details/abi.hpp"
 
-namespace Photophore::Platform::Wayland::Client {
+namespace Photophore::Platform::Wayland::Details::Client {
 
 // Client expresses the core Wayland operations used by Window in terms of the
 // local ABI above. Event enums preserve their wire opcodes, and creation always
@@ -90,6 +90,6 @@ auto flush(ABI::Display* display) -> S32;
 auto roundtrip(ABI::Display* display) -> S32;
 auto get_descriptor(ABI::Display* display) -> S32;
 
-}  // namespace Photophore::Platform::Wayland::Client
+}  // namespace Photophore::Platform::Wayland::Details::Client
 
 #endif

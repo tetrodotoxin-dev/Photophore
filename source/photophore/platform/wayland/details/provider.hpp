@@ -9,11 +9,11 @@
 
 #ifdef TOOLCHAIN_LINUX
 
-#include "photophore/platform/wayland/client.hpp"
-#include "photophore/platform/wayland/xdg_shell_v1.hpp"
+#include "photophore/platform/wayland/details/client.hpp"
+#include "photophore/platform/wayland/details/xdg_shell_v1.hpp"
 #include "photophore/platform/window.hpp"
 
-namespace Photophore::Platform::Wayland {
+namespace Photophore::Platform::Wayland::Details {
 
 // Provider supplies the Linux operations for one public Window. Its
 // stable allocation owns the display connection, protocol objects and callback
@@ -40,7 +40,7 @@ class Provider final : public Window::Provider {
   auto initialize(U32 width, U32 height, Perimortem::Core::View::Bytes title)
       -> void;
   auto register_global(
-      Wayland::ABI::Proxy* registry,
+      Wayland::Details::ABI::Proxy* registry,
       U32 name,
       Perimortem::Core::View::Bytes interface,
       U32 version) -> void;
@@ -48,21 +48,21 @@ class Provider final : public Window::Provider {
   auto update_seat(U32 capabilities) -> void;
   auto clear_input() -> void;
 
-  Wayland::ABI::Display* display = nullptr;
-  Wayland::ABI::Proxy* registry = nullptr;
-  Wayland::ABI::Proxy* compositor = nullptr;
-  Wayland::ABI::Proxy* shell = nullptr;
-  Wayland::ABI::Proxy* surface = nullptr;
-  Wayland::ABI::Proxy* shell_surface = nullptr;
-  Wayland::ABI::Proxy* toplevel = nullptr;
-  Wayland::ABI::Proxy* seat = nullptr;
-  Wayland::ABI::Proxy* keyboard = nullptr;
-  Wayland::ABI::Proxy* pointer = nullptr;
+  Wayland::Details::ABI::Display* display = nullptr;
+  Wayland::Details::ABI::Proxy* registry = nullptr;
+  Wayland::Details::ABI::Proxy* compositor = nullptr;
+  Wayland::Details::ABI::Proxy* shell = nullptr;
+  Wayland::Details::ABI::Proxy* surface = nullptr;
+  Wayland::Details::ABI::Proxy* shell_surface = nullptr;
+  Wayland::Details::ABI::Proxy* toplevel = nullptr;
+  Wayland::Details::ABI::Proxy* seat = nullptr;
+  Wayland::Details::ABI::Proxy* keyboard = nullptr;
+  Wayland::Details::ABI::Proxy* pointer = nullptr;
   U32 seat_name = 0;
   Bool keyboard_focused = False;
   CallbackContext callback_context;
 };
 
-}  // namespace Photophore::Platform::Wayland
+}  // namespace Photophore::Platform::Wayland::Details
 
 #endif

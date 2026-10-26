@@ -1,13 +1,13 @@
 // # Tetrodotoxin
 // Copyright (c) 2023-present Matt Kaes and contributors
 
-#include "photophore/platform/win32/provider.hpp"
+#include "photophore/platform/win32/details/provider.hpp"
 
 #ifdef TOOLCHAIN_WINDOWS
 
 #include <windowsx.h>
 
-#include "photophore/platform/state.hpp"
+#include "photophore/platform/details/state.hpp"
 
 #define VK_USE_PLATFORM_WIN32_KHR
 
@@ -89,10 +89,10 @@ static auto release_window_class() -> void {
   }
 }
 
-auto Win32::Provider::create(U32 width, U32 height, View::Bytes title)
-    -> Win32::Provider* {
-  auto* window =
-      create_state<Win32::Provider>([] { return Win32::Provider(); });
+auto Win32::Details::Provider::create(U32 width, U32 height, View::Bytes title)
+    -> Win32::Details::Provider* {
+  auto* window = create_state<Win32::Details::Provider>(
+      [] { return Win32::Details::Provider(); });
   if (!window) {
     return nullptr;
   }
@@ -106,9 +106,12 @@ auto Win32::Provider::create(U32 width, U32 height, View::Bytes title)
   return window;
 }
 
-auto Win32::Provider::initialize(U32 width, U32 height, View::Bytes title)
-    -> void {
-  static auto configure = [](Win32::Provider& window, U32 width, U32 height) {
+auto Win32::Details::Provider::initialize(
+    U32 width,
+    U32 height,
+    View::Bytes title) -> void {
+  static auto configure = [](Win32::Details::Provider& window, U32 width,
+                             U32 height) {
     if (width != window.logical_width || height != window.logical_height) {
       window.logical_width = width;
       window.logical_height = height;
@@ -161,13 +164,13 @@ auto Win32::Provider::initialize(U32 width, U32 height, View::Bytes title)
 
   const WNDPROC process = [](HWND handle, UINT message, WPARAM wparam,
                              LPARAM lparam) -> LRESULT {
-    auto* window = Data::bit_cast<Win32::Provider*>(
+    auto* window = Data::bit_cast<Win32::Details::Provider*>(
         GetWindowLongPtrW(handle, GWLP_USERDATA));
     // CreateWindowEx sends messages before it returns. Install the receiver
     // during WM_NCCREATE so those early callbacks already reach this Window.
     if (message == WM_NCCREATE) {
       auto* creation = Data::bit_cast<CREATESTRUCTW*>(lparam);
-      window = Data::cast<Win32::Provider>(creation->lpCreateParams);
+      window = Data::cast<Win32::Details::Provider>(creation->lpCreateParams);
       window->surface = handle;
       SetWindowLongPtrW(
           handle, GWLP_USERDATA, Data::bit_cast<LONG_PTR>(window));
@@ -369,7 +372,7 @@ auto Win32::Provider::initialize(U32 width, U32 height, View::Bytes title)
   }
 }
 
-auto Win32::Provider::destroy() -> void {
+auto Win32::Details::Provider::destroy() -> void {
   if (surface) {
     DestroyWindow(surface);
   }
@@ -381,7 +384,7 @@ auto Win32::Provider::destroy() -> void {
   destroy_state(this);
 }
 
-auto Win32::Provider::poll_events() -> EventStatus {
+auto Win32::Details::Provider::poll_events() -> EventStatus {
   if (get_event_status() != EventStatus::Ready) {
     return get_event_status();
   }
@@ -409,7 +412,7 @@ auto Win32::Provider::poll_events() -> EventStatus {
   return get_event_status();
 }
 
-auto Win32::Provider::get_presentation() -> Presentation {
+auto Win32::Details::Provider::get_presentation() -> Presentation {
   static const Presentation::Operations operations = {
     .get_instance_extension =
         [](void*) {
@@ -421,7 +424,7 @@ auto Win32::Provider::get_presentation() -> Presentation {
     .create_surface =
         [](void* context, VkInstance instance, PFN_vkGetInstanceProcAddr load,
            VkSurfaceKHR* output) {
-          auto* window = Data::cast<Win32::Provider>(context);
+          auto* window = Data::cast<Win32::Details::Provider>(context);
           if (!window->module || !window->surface) {
             return VK_ERROR_INITIALIZATION_FAILED;
           }

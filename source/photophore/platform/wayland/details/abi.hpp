@@ -9,7 +9,7 @@
 
 #ifdef TOOLCHAIN_LINUX
 
-namespace Photophore::Platform::Wayland::ABI {
+namespace Photophore::Platform::Wayland::Details::ABI {
 
 // These declarations describe the stable data and function ABI exported by
 // libwayland-client.so.0. Photophore passes each record back to that runtime
@@ -89,6 +89,6 @@ C_LINKAGE const Interface wl_keyboard_interface;
 C_LINKAGE const Interface wl_pointer_interface;
 C_LINKAGE const Interface wl_output_interface;
 
-}  // namespace Photophore::Platform::Wayland::ABI
+}  // namespace Photophore::Platform::Wayland::Details::ABI
 
 #endif

@@ -9,9 +9,9 @@
 #include "perimortem/core/view/null_terminated.hpp"
 
 #ifdef TOOLCHAIN_LINUX
-#include "photophore/platform/wayland/provider.hpp"
+#include "photophore/platform/wayland/details/provider.hpp"
 #elifdef TOOLCHAIN_WINDOWS
-#include "photophore/platform/win32/provider.hpp"
+#include "photophore/platform/win32/details/provider.hpp"
 #endif
 
 using namespace Perimortem::Core;
@@ -23,11 +23,11 @@ auto Window::create(U32 width, U32 height, View::Bytes title)
 
 #ifdef TOOLCHAIN_LINUX
 
-  auto* provider = Wayland::Provider::create(width, height, title);
+  auto* provider = Wayland::Details::Provider::create(width, height, title);
 
 #elifdef TOOLCHAIN_WINDOWS
 
-  auto* provider = Win32::Provider::create(width, height, title);
+  auto* provider = Win32::Details::Provider::create(width, height, title);
 
 #else
 
