@@ -13,8 +13,8 @@
 namespace Photophore::Vulkan {
 
 // TextureImage owns one sRGB VkImage, its device memory and its sampled view
-// for a shared Rgba8 Matrix. create stages tightly packed pixels, records the
-// layout transitions and waits for the graphics queue. A successful return
+// for a shared Srgba8 Matrix. `create` stages tightly packed pixels, records
+// the layout transitions and waits for the graphics queue. A successful return
 // therefore contains an independent device copy and permits immediate staging
 // release.
 //

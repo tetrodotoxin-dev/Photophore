@@ -33,7 +33,8 @@ _LIBRARY = dict(
 _COMPONENTS = {
     "description": [],
     "image": [],
-    "platform": [],
+    "input": [],
+    "platform": ["input"],
     "frame": ["image"],
     "scene": [
         "frame",

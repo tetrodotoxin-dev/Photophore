@@ -6,11 +6,10 @@
 
 #include "perimortem/memory/matrix.hpp"
 
-#include "perimortem/serialization/rgba8.hpp"
-
 #include "perimortem/math/domain.hpp"
 #include "perimortem/math/size.hpp"
 #include "photophore/frame/batch.hpp"
+#include "photophore/image/srgba8.hpp"
 #include "photophore/image/texture_2d.hpp"
 #include "photophore/scene/sprite.hpp"
 #include "toolchain/validation/unit_test.hpp"
@@ -18,7 +17,6 @@
 using namespace Perimortem::Core;
 using namespace Perimortem::Math;
 using namespace Perimortem::Memory;
-using namespace Perimortem::Serialization;
 using namespace Toolchain::Validation;
 using namespace Photophore::Image;
 using namespace Photophore::Scene;
@@ -28,6 +26,20 @@ static Harness GraphicsImage = {.name = "Photophore::ImageResources"};
 static auto make_size(U32 width, U32 height) -> Size<U32, 2> {
   Static::Vector<U32, 2> dimensions = {{width, height}};
   return Size<U32, 2>(dimensions);
+}
+
+VALIDATION_TEST(GraphicsImage, srgba8_contract) {
+  const Srgba8 empty;
+  EXPECT_EQ(empty.red, U8(0));
+  EXPECT_EQ(empty.green, U8(0));
+  EXPECT_EQ(empty.blue, U8(0));
+  EXPECT_EQ(empty.alpha, U8(0));
+
+  const Srgba8 opaque = Srgba8::from_rgb(17, 34, 51);
+  EXPECT_EQ(opaque.red, U8(17));
+  EXPECT_EQ(opaque.green, U8(34));
+  EXPECT_EQ(opaque.blue, U8(51));
+  EXPECT_EQ(opaque.alpha, U8(0xFF));
 }
 
 VALIDATION_TEST(GraphicsImage, empty_values) {
@@ -45,11 +57,11 @@ VALIDATION_TEST(GraphicsImage, empty_values) {
 // values.
 VALIDATION_TEST(GraphicsImage, frame_lifetime) {
   Dynamic::Vector<Texture2D> textures;
-  const Matrix<Rgba8>* identity;
+  const Matrix<Srgba8>* identity;
   {
-    Dynamic::Vector<Rgba8> pixels;
-    pixels.emplace(Rgba8::from_rgb(17, 34, 51));
-    Matrix<Rgba8> created = Matrix<Rgba8>::create(
+    Dynamic::Vector<Srgba8> pixels;
+    pixels.emplace(Srgba8::from_rgb(17, 34, 51));
+    Matrix<Srgba8> created = Matrix<Srgba8>::create(
         Domain<2, Boundary::Clip, Boundary::Clip>(make_size(1, 1)),
         pixels.get_view());
     Texture2D wrapped(

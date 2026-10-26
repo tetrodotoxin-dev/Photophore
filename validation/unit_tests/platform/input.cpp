@@ -12,7 +12,7 @@ static Harness PlatformInput = {.name = "Photophore::Platform::Input"};
 
 VALIDATION_TEST(PlatformInput, frame_boundaries) {
   Input input;
-  Perimortem::System::Input::Mapping mapping;
+  Photophore::Input::Mapping mapping;
   input.set_key(Input::Key::A, True);
   auto first = input.collect(mapping);
   EXPECT(first.is_pressed(Input::Key::A));
@@ -28,7 +28,7 @@ VALIDATION_TEST(PlatformInput, frame_boundaries) {
 
 VALIDATION_TEST(PlatformInput, mapped_controls) {
   Input input;
-  Perimortem::System::Input::Mapping mapping;
+  Photophore::Input::Mapping mapping;
   mapping.remap(Input::Key::A, Input::Key::ArrowLeft);
   mapping.remap(Input::Key::Q, Input::Key::ArrowLeft);
   input.set_key(Input::Key::A, True);
@@ -43,7 +43,7 @@ VALIDATION_TEST(PlatformInput, mapped_controls) {
 
 VALIDATION_TEST(PlatformInput, pointer_focus) {
   Input input;
-  Perimortem::System::Input::Mapping mapping;
+  Photophore::Input::Mapping mapping;
   input.set_pointer(10, 20);
   input.set_key(Input::Key::MousePrimary, True);
   auto entered = input.collect(mapping);

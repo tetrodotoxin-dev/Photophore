@@ -6,11 +6,10 @@
 #include "perimortem/memory/dynamic/vector.hpp"
 #include "perimortem/memory/matrix.hpp"
 
-#include "perimortem/serialization/rgba8.hpp"
-
 #include "perimortem/math/domain.hpp"
 #include "perimortem/math/point.hpp"
 #include "perimortem/math/size.hpp"
+#include "photophore/image/srgba8.hpp"
 #include "photophore/image/texture_2d.hpp"
 #include "photophore/scene/sprite.hpp"
 #include "toolchain/validation/unit_test.hpp"
@@ -18,7 +17,6 @@
 using namespace Perimortem::Core;
 using namespace Perimortem::Math;
 using namespace Perimortem::Memory;
-using namespace Perimortem::Serialization;
 using namespace Toolchain::Validation;
 using namespace Photophore::Image;
 using namespace Photophore::Scene;
@@ -32,10 +30,10 @@ static auto make_size(U32 width, U32 height) -> Size<U32, 2> {
   return Size<U32, 2>(dimensions);
 }
 
-static auto one_pixel_image() -> Matrix<Rgba8> {
-  Dynamic::Vector<Rgba8> pixels;
-  pixels.emplace(Rgba8::from_rgba(0x12, 0x34, 0x56, 0x78));
-  return Matrix<Rgba8>::create(
+static auto one_pixel_image() -> Matrix<Srgba8> {
+  Dynamic::Vector<Srgba8> pixels;
+  pixels.emplace(Srgba8::from_rgba(0x12, 0x34, 0x56, 0x78));
+  return Matrix<Srgba8>::create(
       Domain<2, Boundary::Clip, Boundary::Clip>(make_size(1, 1)),
       pixels.get_view());
 }

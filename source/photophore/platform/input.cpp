@@ -9,12 +9,11 @@
 #include <windows.h>
 #endif
 
-auto Photophore::Platform::Input::set_key(
-    Perimortem::System::Input::Key key,
-    Bool down) -> void {
+auto Photophore::Platform::Input::set_key(Photophore::Input::Key key, Bool down)
+    -> void {
   Count index = Count(key);
-  if (key == Perimortem::System::Input::Key::None ||
-      index >= Perimortem::System::Input::key_count) {
+  if (key == Photophore::Input::Key::None ||
+      index >= Photophore::Input::key_count) {
     return;
   }
 
@@ -27,44 +26,43 @@ auto Photophore::Platform::Input::set_key(
 }
 
 auto Photophore::Platform::Input::clear_keyboard() -> void {
-  for (Count index = Count(Perimortem::System::Input::Key::Escape);
-       index < Count(Perimortem::System::Input::Key::MousePrimary); index++) {
-    set_key(Perimortem::System::Input::Key(index), False);
+  for (Count index = Count(Photophore::Input::Key::Escape);
+       index < Count(Photophore::Input::Key::MousePrimary); index++) {
+    set_key(Photophore::Input::Key(index), False);
   }
 }
 
 auto Photophore::Platform::Input::clear_pointer() -> void {
-  for (Count index = Count(Perimortem::System::Input::Key::MousePrimary);
-       index <= Count(Perimortem::System::Input::Key::MouseEight); index++) {
-    set_key(Perimortem::System::Input::Key(index), False);
+  for (Count index = Count(Photophore::Input::Key::MousePrimary);
+       index <= Count(Photophore::Input::Key::MouseEight); index++) {
+    set_key(Photophore::Input::Key(index), False);
   }
   pointer_focused = False;
 }
 
 auto Photophore::Platform::Input::collect(
-    const Perimortem::System::Input::Mapping& mapping)
-    -> Perimortem::System::Input {
+    const Photophore::Input::Mapping& mapping) -> Photophore::Input::Snapshot {
   Perimortem::Core::Static::Vector<
-      Perimortem::System::Input::Key, Perimortem::System::Input::key_count>
+      Photophore::Input::Key, Photophore::Input::key_count>
       current_keys;
   Perimortem::Core::Static::Vector<
-      Perimortem::System::Input::Key, Perimortem::System::Input::key_count>
+      Photophore::Input::Key, Photophore::Input::key_count>
       previous_keys;
   Count current_count = 0;
   Count previous_count = 0;
-  for (Count index = 1; index < Perimortem::System::Input::key_count; index++) {
+  for (Count index = 1; index < Photophore::Input::key_count; index++) {
     U64 mask = U64(1) << (index % word_bits);
     if ((current[index / word_bits] & mask) != 0) {
-      current_keys[current_count++] = Perimortem::System::Input::Key(index);
+      current_keys[current_count++] = Photophore::Input::Key(index);
     }
     if ((previous[index / word_bits] & mask) != 0) {
-      previous_keys[previous_count++] = Perimortem::System::Input::Key(index);
+      previous_keys[previous_count++] = Photophore::Input::Key(index);
     }
   }
 
   // Each focused interval establishes its own pointer motion baseline. The
   // first observation in a new interval therefore begins with a zero delta.
-  Perimortem::System::Input::Pointer pointer_state = {
+  Photophore::Input::Pointer pointer_state = {
     pointer_x,
     pointer_y,
     pointer_focused && previous_pointer_focused ? pointer_x - previous_pointer_x
@@ -75,7 +73,7 @@ auto Photophore::Platform::Input::collect(
     scroll_y,
     pointer_focused,
   };
-  Perimortem::System::Input output = Perimortem::System::Input::create(
+  Photophore::Input::Snapshot output = Photophore::Input::Snapshot::create(
       current_keys.slice(0, current_count),
       previous_keys.slice(0, previous_count), mapping, pointer_state);
 

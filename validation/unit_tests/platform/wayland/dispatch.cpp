@@ -232,7 +232,7 @@ VALIDATION_TEST(WaylandDispatch, protocol_events) {
       unsetenv("WAYLAND_SOCKET");
     }
     free(saved);
-    using Key = Perimortem::System::Input::Key;
+    using Key = Photophore::Input::Key;
     bool observed = false;
     for (unsigned attempt = 0; attempt < 1000 && !observed; ++attempt) {
       window.poll_events();

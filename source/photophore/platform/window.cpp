@@ -1436,15 +1436,14 @@ auto Window::clear_resize() -> void {
   needs_resize = False;
 }
 
-auto Window::get_input() const -> const Perimortem::System::Input& {
+auto Window::get_input() const -> const Photophore::Input::Snapshot& {
   return input_snapshot;
 }
 
-auto Window::get_input_mapping() -> Perimortem::System::Input::Mapping& {
+auto Window::get_input_mapping() -> Photophore::Input::Mapping& {
   return input_mapping;
 }
 
-auto Window::get_input_mapping() const
-    -> const Perimortem::System::Input::Mapping& {
+auto Window::get_input_mapping() const -> const Photophore::Input::Mapping& {
   return input_mapping;
 }

@@ -51,23 +51,23 @@ class Window {
   EXPORTED(PHOTOPHORE) auto get_needs_resize() const -> Bool;
   EXPORTED(PHOTOPHORE) auto clear_resize() -> void;
 
-  // A completed poll replaces the stored Input snapshot. get_input borrows it
-  // through the next poll, while copying it preserves that observation. Mapping
-  // changes apply when the next snapshot is collected.
+  // A completed poll replaces the stored input Snapshot. `get_input` returns a
+  // reference that remains valid through the next poll, while copying it
+  // preserves that observation. Mapping changes apply to the next Snapshot.
   EXPORTED(PHOTOPHORE)
-  auto get_input() const -> const Perimortem::System::Input&;
+  auto get_input() const -> const Photophore::Input::Snapshot&;
   EXPORTED(PHOTOPHORE)
-  auto get_input_mapping() -> Perimortem::System::Input::Mapping&;
+  auto get_input_mapping() -> Photophore::Input::Mapping&;
   EXPORTED(PHOTOPHORE)
-  auto get_input_mapping() const -> const Perimortem::System::Input::Mapping&;
+  auto get_input_mapping() const -> const Photophore::Input::Mapping&;
 
   EXPORTED(PHOTOPHORE)
   auto get_presentation() const -> Photophore::Platform::Presentation;
 
  private:
   Input input_collector;
-  Perimortem::System::Input::Mapping input_mapping;
-  Perimortem::System::Input input_snapshot;
+  Photophore::Input::Mapping input_mapping;
+  Photophore::Input::Snapshot input_snapshot;
   void* native = nullptr;
   void* connection = nullptr;
   void* surface = nullptr;

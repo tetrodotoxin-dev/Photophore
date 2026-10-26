@@ -20,7 +20,9 @@
 #include "perimortem/math/domain.hpp"
 #include "perimortem/math/size.hpp"
 #include "photophore/frame/batch.hpp"
+#include "photophore/image/srgba8.hpp"
 #include "photophore/image/texture_2d.hpp"
+#include "photophore/input/snapshot.hpp"
 #include "photophore/platform/window.hpp"
 #include "photophore/vulkan/pipelines.hpp"
 #include "photophore/vulkan/renderer.hpp"
@@ -52,12 +54,24 @@ static auto make_size(U32 width, U32 height) -> Size<U32, 2> {
   return Size<U32, 2>(dimensions);
 }
 
-static auto matches(const Rgba8& pixel, U8 red, U8 green, U8 blue) -> Bool {
+static auto matches(const Srgba8& pixel, U8 red, U8 green, U8 blue) -> Bool {
   return pixel.red == red && pixel.green == green && pixel.blue == blue &&
          pixel.alpha == 0xFF;
 }
 
-static auto has_expected_orientation(const Matrix<Rgba8>& image) -> Bool {
+static auto as_srgba8(const Matrix<Rgba8>& decoded) -> Matrix<Srgba8> {
+  Dynamic::Vector<Srgba8> pixels(decoded.get_values().get_size());
+  for (const Rgba8& source : decoded.get_values()) {
+    pixels.emplace(
+        Srgba8::from_rgba(source.red, source.green, source.blue, source.alpha));
+  }
+
+  // The embedded demo image is authored for sRGB display. This conversion is
+  // the point where decoded channel bytes acquire Photophore's color contract.
+  return Matrix<Srgba8>::create(decoded.get_domain(), pixels.get_view());
+}
+
+static auto has_expected_orientation(const Matrix<Srgba8>& image) -> Bool {
   if (image.get_column_count() != 4 || image.get_row_count() != 4) {
     return False;
   }
@@ -69,20 +83,20 @@ static auto has_expected_orientation(const Matrix<Rgba8>& image) -> Bool {
          matches(pixels[15], 0xFF, 0xFF, 0x00);
 }
 
-static auto make_overlay() -> Matrix<Rgba8> {
+static auto make_overlay() -> Matrix<Srgba8> {
   // A second independent image exercises another descriptor set in the same
   // fragment stage and makes the composed shader result easy to recognize.
   constexpr U32 width = 64;
   constexpr U32 height = 64;
-  Dynamic::Vector<Rgba8> pixels;
+  Dynamic::Vector<Srgba8> pixels;
   for (U32 row = 0; row < height; row++) {
     for (U32 column = 0; column < width; column++) {
       U8 value = (row + column) * 2;
-      pixels.emplace(Rgba8::from_rgba(0x28, value, 0xE8, 0xFF));
+      pixels.emplace(Srgba8::from_rgba(0x28, value, 0xE8, 0xFF));
     }
   }
 
-  return Matrix<Rgba8>::create(
+  return Matrix<Srgba8>::create(
       Domain<2, Boundary::Clip, Boundary::Clip>(make_size(width, height)),
       pixels.get_view());
 }
@@ -132,7 +146,7 @@ static auto read_frame_limit(int count, char** values) -> Count {
 }
 
 static auto configure_controls(Photophore::Platform::Window& window) -> void {
-  using Key = Perimortem::System::Input::Key;
+  using Key = Photophore::Input::Key;
   auto& mapping = window.get_input_mapping();
   // WASD and the arrow keys become two physical bindings for the same logical
   // controls. The application therefore consumes one mapped vocabulary across
@@ -144,13 +158,13 @@ static auto configure_controls(Photophore::Platform::Window& window) -> void {
 }
 
 static auto move_sprite(
-    const Perimortem::System::Input& input,
+    const Photophore::Input::Snapshot& input,
     R64 elapsed_seconds,
     U32 width_pixels,
     U32 height_pixels,
     R64& x,
     R64& y) -> void {
-  using Key = Perimortem::System::Input::Key;
+  using Key = Photophore::Input::Key;
   constexpr R64 movement_per_second = 240.0;
   const R64 movement = movement_per_second * elapsed_seconds;
   if (input.is_current(Key::ArrowLeft)) {
@@ -195,7 +209,7 @@ static auto advance_bounce(R64 elapsed_seconds, R64& offset, R64& direction)
 }
 
 int main(int count, char** values) {
-  using Key = Perimortem::System::Input::Key;
+  using Key = Photophore::Input::Key;
   constexpr U32 initial_width = 800;
   constexpr U32 initial_height = 600;
   Photophore::Platform::Window window(
@@ -225,8 +239,9 @@ int main(int count, char** values) {
   Pipelines pipelines(
       renderer.get_context(), renderer.get_swapchain().get_format(),
       descriptions);
-  Matrix<Rgba8> orientation = Png::decode(
-      View::Bytes(orientation_png, Data::array_size(orientation_png)));
+  Matrix<Srgba8> orientation = as_srgba8(
+      Png::decode(
+          View::Bytes(orientation_png, Data::array_size(orientation_png))));
   if (!has_expected_orientation(orientation)) {
     fputs("Photophore could not decode the orientation PNG.\n", stderr);
     return 3;

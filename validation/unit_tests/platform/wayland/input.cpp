@@ -19,22 +19,22 @@ static Harness WaylandInput = {
 VALIDATION_TEST(WaylandInput, key_translation) {
   EXPECT(
       Photophore::Platform::Input::translate_keyboard(KEY_A) ==
-      Perimortem::System::Input::Key::A);
+      Photophore::Input::Key::A);
   EXPECT(
       Photophore::Platform::Input::translate_keyboard(KEY_F24) ==
-      Perimortem::System::Input::Key::F24);
+      Photophore::Input::Key::F24);
   EXPECT(
       Photophore::Platform::Input::translate_keyboard(KEY_RO) ==
-      Perimortem::System::Input::Key::InternationalRo);
+      Photophore::Input::Key::InternationalRo);
   EXPECT(
       Photophore::Platform::Input::translate_keyboard(KEY_RESERVED) ==
-      Perimortem::System::Input::Key::None);
+      Photophore::Input::Key::None);
   EXPECT(
       Photophore::Platform::Input::translate_button(BTN_LEFT) ==
-      Perimortem::System::Input::Key::MousePrimary);
+      Photophore::Input::Key::MousePrimary);
   EXPECT(
       Photophore::Platform::Input::translate_button(BTN_BACK) ==
-      Perimortem::System::Input::Key::MouseBack);
+      Photophore::Input::Key::MouseBack);
 }
 
 #endif

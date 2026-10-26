@@ -7,18 +7,16 @@
 
 #include "perimortem/memory/matrix.hpp"
 
-#include "perimortem/serialization/rgba8.hpp"
-
 #include "perimortem/math/domain.hpp"
 #include "perimortem/math/size.hpp"
 #include "photophore/frame/batch.hpp"
+#include "photophore/image/srgba8.hpp"
 #include "photophore/image/texture_2d.hpp"
 #include "toolchain/validation/benchmark.hpp"
 
 using namespace Perimortem::Core;
 using namespace Perimortem::Math;
 using namespace Perimortem::Memory;
-using namespace Perimortem::Serialization;
 using namespace Photophore::Image;
 
 static auto make_size(U32 width, U32 height) -> Size<U32, 2> {
@@ -26,9 +24,9 @@ static auto make_size(U32 width, U32 height) -> Size<U32, 2> {
   return Size<U32, 2>(dimensions);
 }
 
-static auto one_pixel_image() -> Matrix<Rgba8> {
-  Dynamic::Vector<Rgba8> pixels;
-  return Matrix<Rgba8>::create(
+static auto one_pixel_image() -> Matrix<Srgba8> {
+  Dynamic::Vector<Srgba8> pixels;
+  return Matrix<Srgba8>::create(
       Domain<2, Boundary::Clip, Boundary::Clip>(make_size(1, 1)),
       pixels.get_view());
 }
@@ -38,7 +36,7 @@ static Toolchain::Validation::Harness Frames = {
   .name = "Photophore::Frame",
   .setup =
       [] {
-        Matrix<Rgba8> image = one_pixel_image();
+        Matrix<Srgba8> image = one_pixel_image();
         const Texture2D texture(Data::take(image));
         for (Count i = 0; i < 1024; ++i) {
           Dynamic::Vector<Texture2D> resources;

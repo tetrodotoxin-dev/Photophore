@@ -10,6 +10,7 @@ package(
         "description",
         "frame",
         "image",
+        "input",
         "platform",
         "scene",
         "vulkan",
