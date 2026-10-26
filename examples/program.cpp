@@ -3,7 +3,7 @@
 
 #include "examples/program.hpp"
 
-#include "perimortem/core/data.hpp"
+#include "perimortem/core/storage/vector.hpp"
 #include "perimortem/core/view/null_terminated.hpp"
 
 using namespace Perimortem::Core;
@@ -13,7 +13,7 @@ using namespace Photophore::Examples;
 // These modules are optimized Vulkan 1.3 SPIR V compiled from the neighboring
 // GLSL sources. Embedding the validated words keeps the executable independent
 // of a host shader compiler while the authored programs remain reviewable.
-alignas(U32) static constexpr U32 vertex_module[] = {
+alignas(U32) static constexpr Storage::Vector<U32, 355> vertex_module = {{
   119734787u, 67072u,      851979u, 77u,         0u,          131089u,
   1u,         393227u,     1u,      1280527431u, 1685353262u, 808793134u,
   0u,         196622u,     0u,      1u,          655375u,     0u,
@@ -74,9 +74,9 @@ alignas(U32) static constexpr U32 vertex_module[] = {
   15u,        196670u,     72u,     70u,         262205u,     7u,
   76u,        75u,         196670u, 74u,         76u,         65789u,
   65592u,
-};
+}};
 
-alignas(U32) static constexpr U32 fragment_module[] = {
+alignas(U32) static constexpr Storage::Vector<U32, 267> fragment_module = {{
   119734787u,  67072u,      851979u,     52u,         0u,          131089u,
   1u,          393227u,     1u,          1280527431u, 1685353262u, 808793134u,
   0u,          196622u,     0u,          1u,          655375u,     4u,
@@ -122,7 +122,7 @@ alignas(U32) static constexpr U32 fragment_module[] = {
   46u,         262205u,     7u,          49u,         48u,         327813u,
   7u,          50u,         41u,         49u,         196670u,     36u,
   50u,         65789u,      65592u,
-};
+}};
 
 static constexpr Identity::Uuid program_identity(
     0xf8f633ad0ed74346ULL,
@@ -130,44 +130,44 @@ static constexpr Identity::Uuid program_identity(
 
 // Both shader stages read the same twelve word host block. The vertex stage
 // consumes transform rows while the pixel stage consumes the tone suffix.
-static constexpr Stage input_stages[] = {
+static constexpr Storage::Vector<Stage, 2> input_stages = {{
   Stage::Vertex,
   Stage::Pixel,
-};
+}};
 
-static const Module modules[] = {
-  {
+static const Storage::Vector<Module, 2> modules = {{
+  Module{
     Stage::Vertex,
-    View::Vector<U32>(vertex_module),
+    vertex_module.get_view(),
     {},
   },
 
   {
     Stage::Pixel,
-    View::Vector<U32>(fragment_module),
+    fragment_module.get_view(),
     {},
   },
-};
+}};
 
-static const HostInputRange host_input_ranges[] = {
-  {
+static const Storage::Vector<HostInputRange, 1> host_input_ranges = {{
+  HostInputRange{
     0,
     sizeof(R32) * 12,
-    View::Vector<Stage>(input_stages),
+    input_stages.get_view(),
   },
-};
+}};
 
-static const DescriptorBinding descriptors[] = {
+static const Storage::Vector<DescriptorBinding, 2> descriptors = {{
   // Distinct descriptor sets demonstrate multiple independently cached images
   // in one fragment pipeline while retaining binding zero in each set.
-  {"image"_view, 0, 0, Resource::SampledTexture2D},
+  DescriptorBinding{"image"_view, 0, 0, Resource::SampledTexture2D},
   {"overlay"_view, 1, 0, Resource::SampledTexture2D},
-};
+}};
 
-static const HostField host_fields[] = {
+static const Storage::Vector<HostField, 3> host_fields = {{
   // Pipelines derives transform rows from each Batch and copies tone from its
   // variable parameter bytes into the same generated host block.
-  {"transform_x"_view, 0, sizeof(R32) * 4, HostRole::TransformX},
+  HostField{"transform_x"_view, 0, sizeof(R32) * 4, HostRole::TransformX},
 
   {
     "transform_y"_view,
@@ -182,12 +182,12 @@ static const HostField host_fields[] = {
     sizeof(R32) * 4,
     HostRole::Parameter,
   },
-};
+}};
 
-static constexpr VertexInput vertex_inputs[] = {
-  {0, 2, 0, sizeof(R32) * 4},
+static constexpr Storage::Vector<VertexInput, 2> vertex_inputs = {{
+  VertexInput{0, 2, 0, sizeof(R32) * 4},
   {1, 2, sizeof(R32) * 2, sizeof(R32) * 4},
-};
+}};
 
 auto SpriteProgram::get_program() -> decltype(SpriteProgram::get_program()) {
   return decltype(SpriteProgram::get_program())(program_identity);
@@ -197,11 +197,11 @@ auto SpriteProgram::get_description()
     -> decltype(SpriteProgram::get_description()) {
   return {
     .identity = program_identity,
-    .modules = View::Vector<Module>(modules),
-    .host_input_ranges = View::Vector<HostInputRange>(host_input_ranges),
-    .descriptors = View::Vector<DescriptorBinding>(descriptors),
-    .host_fields = View::Vector<HostField>(host_fields),
-    .vertex_inputs = View::Vector<VertexInput>(vertex_inputs),
+    .modules = modules.get_view(),
+    .host_input_ranges = host_input_ranges.get_view(),
+    .descriptors = descriptors.get_view(),
+    .host_fields = host_fields.get_view(),
+    .vertex_inputs = vertex_inputs.get_view(),
     .host_size = sizeof(R32) * 12,
     .parameters_offset = sizeof(R32) * 8,
     .parameters_size = sizeof(R32) * 4,

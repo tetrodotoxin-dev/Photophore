@@ -9,6 +9,7 @@
 #include "perimortem/core/math/domain.hpp"
 #include "perimortem/core/math/scalar.hpp"
 #include "perimortem/core/math/size.hpp"
+#include "perimortem/core/storage/bytes.hpp"
 #include "perimortem/core/storage/vector.hpp"
 #include "perimortem/core/view/null_terminated.hpp"
 #include "perimortem/memory/matrix.hpp"
@@ -41,7 +42,7 @@ static constexpr U32 sprite_extent_pixels = 192;
 // This standard RGBA PNG has red and green upper quadrants followed by blue
 // and yellow lower quadrants. Decoding its authored rows makes orientation
 // visible through the complete PNG, Matrix, upload and shader path.
-static constexpr U8 orientation_png[] = {
+static constexpr Storage::Bytes<83> orientation_png = {{
   0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D,
   0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x04, 0x00, 0x00, 0x00, 0x04,
   0x08, 0x06, 0x00, 0x00, 0x00, 0xA9, 0xF1, 0x9E, 0x7E, 0x00, 0x00, 0x00,
@@ -49,7 +50,7 @@ static constexpr U8 orientation_png[] = {
   0x1F, 0x84, 0x91, 0x20, 0x9A, 0x00, 0x94, 0x0F, 0x04, 0x0C, 0x60, 0x8C,
   0x21, 0x00, 0x00, 0x66, 0x16, 0x23, 0xDD, 0xE4, 0x60, 0xDB, 0x58, 0x00,
   0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60, 0x82,
-};
+}};
 
 static auto make_size(U32 width, U32 height) -> Math::Size<U32, 2> {
   Storage::Vector<U32, 2> dimensions = {{width, height}};
@@ -108,10 +109,10 @@ static auto make_inputs(R32 red, R32 green, R32 blue, R32 alpha)
     -> Thread::Bytes {
   // Batch parameter bytes already follow the generated host layout. Pipelines
   // places this tone after its two transform rows in the shared push range.
-  R32 tone[] = {red, green, blue, alpha};
+  Storage::Vector<R32, 4> tone = {{red, green, blue, alpha}};
   Thread::Bytes inputs;
-  inputs.append(0, sizeof(tone));
-  Data::copy(inputs.get_access().get_data(), tone, Data::array_size(tone));
+  inputs.append(0, tone.get_size() * sizeof(R32));
+  Data::copy(inputs.get_access().get_data(), tone.get_data(), tone.get_size());
   return inputs;
 }
 
@@ -226,14 +227,14 @@ static auto run(Window& window, S32 count, char** values) -> S32 {
 
   using DescriptionProgram = decltype(SpriteProgram::get_description());
   const DescriptionProgram description = SpriteProgram::get_description();
-  // Description arrays and shader modules have process lifetime in program.cpp.
+  // Description tables and shader modules have process lifetime in program.cpp.
   // Pipelines borrows this local top level value for the complete render loop.
   const View::Vector<DescriptionProgram> descriptions(description, 1);
   Pipelines pipelines(
       renderer.get_context(), renderer.get_swapchain().get_format(),
       descriptions);
   Matrix<Srgba8> orientation =
-      as_srgba8(Formats::Png::decode(View::Bytes(orientation_png)));
+      as_srgba8(Formats::Png::decode(orientation_png.get_view()));
   if (!has_expected_orientation(orientation)) {
     fputs("Photophore could not decode the orientation PNG.\n", stderr);
     return 3;

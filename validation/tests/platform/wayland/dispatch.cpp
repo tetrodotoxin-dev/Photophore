@@ -16,6 +16,7 @@
 #include "toolchain/validation/test.hpp"
 
 #include "perimortem/core/data.hpp"
+#include "perimortem/core/storage/vector.hpp"
 #include "perimortem/core/view/null_terminated.hpp"
 
 #include "photophore/platform/window.hpp"
@@ -46,7 +47,7 @@ struct ProtocolPeer {
     Count
   };
 
-  U32 objects[Count] = {1};
+  Storage::Vector<U32, Count> objects = {{1}};
   S32 socket = -1;
   S32 keymap = -1;
   pthread_t thread;
@@ -77,9 +78,13 @@ struct ProtocolPeer {
   }
 };
 
-static auto send_packet(ProtocolPeer& peer, const U32* packet, CppSize size)
-    -> void {
-  peer.okay &= send(peer.socket, packet, size, MSG_NOSIGNAL) == ssize_t(size);
+template <Count capacity>
+static auto send_packet(
+    ProtocolPeer& peer,
+    const Storage::Vector<U32, capacity>& packet,
+    CppSize size = capacity * sizeof(U32)) -> void {
+  peer.okay &=
+      send(peer.socket, packet.get_data(), size, MSG_NOSIGNAL) == ssize_t(size);
 }
 
 template <class... Words>
@@ -88,26 +93,27 @@ static auto event(
     ProtocolPeer::Object object,
     U32 opcode,
     Words... words) -> void {
-  U32 packet[] = {
-    peer.objects[object],
-    U32((sizeof...(Words) * 4 + 8) << 16) | opcode,
-    U32(words)...,
-  };
+  Storage::Vector<U32, sizeof...(Words) + 2> packet;
+  packet[0] = peer.objects[object];
+  packet[1] = U32((sizeof...(Words) * 4 + 8) << 16) | opcode;
 
-  send_packet(peer, packet, sizeof(packet));
+  Count index = 2;
+  ((packet[index++] = U32(words)), ...);
+
+  send_packet(peer, packet);
 }
 
 static auto
     global(ProtocolPeer& peer, U32 name, const char* interface, U32 version)
         -> void {
-  U32 packet[32] = {};
+  Storage::Vector<U32, 32> packet;
   CppSize length = strlen(interface) + 1;
   CppSize words = (length + 3) / 4;
   packet[0] = peer.objects[ProtocolPeer::Registry];
   packet[1] = U32((5 + words) * 4) << 16;
   packet[2] = name;
   packet[3] = U32(length);
-  memcpy(packet + 4, interface, length);
+  memcpy(packet.get_data() + 4, interface, length);
   packet[4 + words] = version;
   send_packet(peer, packet, (5 + words) * 4);
 }
@@ -128,22 +134,33 @@ static auto publish_input(ProtocolPeer& peer) -> void {
 
   // File descriptors travel as socket ancillary data rather than inline words.
   // The read end reaches EOF only after the receiver releases its delivered FD.
-  U32 keymap[] = {peer.objects[P::Keyboard], 16u << 16, 1, 0};
-  iovec bytes = {keymap, sizeof(keymap)};
-  alignas(cmsghdr) char control[CMSG_SPACE(sizeof(S32))] = {};
+  Storage::Vector<U32, 4> keymap = {{
+    peer.objects[P::Keyboard],
+    16u << 16,
+    1,
+    0,
+  }};
+
+  iovec bytes = {
+    keymap.get_data(),
+    keymap.get_size() * sizeof(U32),
+  };
+
+  alignas(cmsghdr) Storage::Vector<U8, CMSG_SPACE(sizeof(S32))> control;
 
   msghdr message = {};
   message.msg_iov = &bytes;
   message.msg_iovlen = 1;
-  message.msg_control = control;
-  message.msg_controllen = sizeof(control);
+  message.msg_control = control.get_data();
+  message.msg_controllen = control.get_size();
 
   auto* descriptor = CMSG_FIRSTHDR(&message);
   descriptor->cmsg_level = SOL_SOCKET;
   descriptor->cmsg_type = SCM_RIGHTS;
   descriptor->cmsg_len = CMSG_LEN(sizeof(S32));
   memcpy(CMSG_DATA(descriptor), &peer.keymap, sizeof(S32));
-  peer.okay &= sendmsg(peer.socket, &message, MSG_NOSIGNAL) == sizeof(keymap);
+  peer.okay &= sendmsg(peer.socket, &message, MSG_NOSIGNAL) ==
+               ssize_t(keymap.get_size() * sizeof(U32));
   close(peer.keymap);
   peer.keymap = -1;
 
@@ -159,12 +176,13 @@ static auto publish_input(ProtocolPeer& peer) -> void {
 static auto serve(void* context) -> void* {
   auto& peer = *Data::cast<ProtocolPeer>(context);
   using P = ProtocolPeer;
-  U32 packet[128];
-  while (recv(peer.socket, packet, 8, MSG_WAITALL) == 8) {
+  Storage::Vector<U32, 128> packet;
+  while (recv(peer.socket, packet.get_data(), 8, MSG_WAITALL) == 8) {
     CppSize size = packet[1] >> 16;
-    if (size < 8 || size > sizeof(packet) ||
-        (size > 8 && recv(peer.socket, packet + 2, size - 8, MSG_WAITALL) !=
-                         ssize_t(size - 8))) {
+    if (size < 8 || size > packet.get_size() * sizeof(U32) ||
+        (size > 8 &&
+         recv(peer.socket, packet.get_data() + 2, size - 8, MSG_WAITALL) !=
+             ssize_t(size - 8))) {
       peer.okay = false;
       break;
     }
@@ -177,8 +195,8 @@ static auto serve(void* context) -> void* {
       global(peer, 2, "xdg_wm_base", 1);
       global(peer, 3, "wl_seat", 9);
     } else if (object == 1 && opcode == 0) {
-      U32 done[] = {packet[2], 12u << 16, 1};
-      send_packet(peer, done, sizeof(done));
+      Storage::Vector<U32, 3> done = {{packet[2], 12u << 16, 1}};
+      send_packet(peer, done);
       event(peer, P::Display, 1, packet[2]);
     } else if (object == peer.objects[P::Registry] && opcode == 0) {
       U32 id = packet[5 + (packet[3] + 3) / 4];
@@ -222,12 +240,12 @@ static auto serve(void* context) -> void* {
 
 VALIDATION_TEST(WaylandDispatch, protocol_events) {
   ProtocolPeer peer;
-  S32 sockets[2];
-  ASSERT(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets) == 0);
+  Storage::Vector<S32, 2> sockets;
+  ASSERT(socketpair(AF_UNIX, SOCK_STREAM, 0, sockets.get_data()) == 0);
   peer.socket = sockets[1];
 
-  S32 pipe_fds[2];
-  ASSERT(pipe2(pipe_fds, O_NONBLOCK | O_CLOEXEC) == 0);
+  Storage::Vector<S32, 2> pipe_fds;
+  ASSERT(pipe2(pipe_fds.get_data(), O_NONBLOCK | O_CLOEXEC) == 0);
   peer.keymap = pipe_fds[1];
 
   timeval timeout = {2, 0};
@@ -236,24 +254,24 @@ VALIDATION_TEST(WaylandDispatch, protocol_events) {
   peer.started = true;
 
   const char* previous = getenv("WAYLAND_SOCKET");
-  char saved[64] = {};
+  Storage::Vector<char, 64> saved;
   Bool restore_previous = Bool(previous != nullptr);
   if (restore_previous) {
     const auto previous_value =
-        View::NullTerminated(previous, sizeof(saved) - 1).get_view();
-    ASSERT(previous_value.get_size() < sizeof(saved) - 1);
+        View::NullTerminated(previous, saved.get_size() - 1).get_view();
+    ASSERT(previous_value.get_size() < saved.get_size() - 1);
     for (Count index = 0; index < previous_value.get_size(); index++) {
       saved[index] = char(previous_value[index]);
     }
   }
 
-  char descriptor[32];
-  snprintf(descriptor, sizeof(descriptor), "%d", sockets[0]);
-  setenv("WAYLAND_SOCKET", descriptor, 1);
+  Storage::Vector<char, 32> descriptor;
+  snprintf(descriptor.get_data(), descriptor.get_size(), "%d", sockets[0]);
+  setenv("WAYLAND_SOCKET", descriptor.get_data(), 1);
 
   auto available = Window::create(96, 64, "Private protocol check"_view);
   if (restore_previous) {
-    setenv("WAYLAND_SOCKET", saved, 1);
+    setenv("WAYLAND_SOCKET", saved.get_data(), 1);
   } else {
     unsetenv("WAYLAND_SOCKET");
   }

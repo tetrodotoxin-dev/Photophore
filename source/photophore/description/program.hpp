@@ -19,7 +19,7 @@ namespace Photophore::Description {
 // those modules consume. Frame::Batch selects this product through identity and
 // supplies its changing resources, placement and parameter bytes.
 //
-// Every nested array, name and module remains accessible while a Pipelines
+// Every nested table, name and module remains accessible while a Pipelines
 // instance uses this Program. The producer assigns a nonzero identity that is
 // unique within that inventory. Frame::Program carries the same value without
 // acquiring the description or its nested storage.

@@ -55,10 +55,10 @@ static auto make_content() -> Pixels2D {
 }
 
 static auto make_inputs() -> Thread::Bytes {
-  R32 tone[] = {1.0f, 1.0f, 1.0f, 1.0f};
+  Storage::Vector<R32, 4> tone = {{1.0f, 1.0f, 1.0f, 1.0f}};
   Thread::Bytes inputs;
-  inputs.append(0, sizeof(tone));
-  Data::copy(inputs.get_access().get_data(), tone, Data::array_size(tone));
+  inputs.append(0, tone.get_size() * sizeof(R32));
+  Data::copy(inputs.get_access().get_data(), tone.get_data(), tone.get_size());
   return inputs;
 }
 

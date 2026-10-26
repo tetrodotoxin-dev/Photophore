@@ -5,6 +5,7 @@
 
 #include "toolchain/validation/test.hpp"
 
+#include "perimortem/core/storage/vector.hpp"
 #include "perimortem/core/view/vector.hpp"
 
 #include "photophore/input/snapshot.hpp"
@@ -43,10 +44,18 @@ VALIDATION_TEST(InputMapping, operations) {
 // Left and right modifiers publish one common application key. Switching sides
 // keeps that grouped key held rather than creating a release and press pair.
 VALIDATION_TEST(InputMapping, modifier_groups) {
-  const Key previous[] = {Key::LeftShift, Key::LeftControl};
-  const Key current[] = {Key::RightShift, Key::RightControl};
-  const Snapshot snapshot = Snapshot::create(
-      View::Vector<Key>(current), View::Vector<Key>(previous), Mapping());
+  const Storage::Vector<Key, 2> previous = {{
+    Key::LeftShift,
+    Key::LeftControl,
+  }};
+
+  const Storage::Vector<Key, 2> current = {{
+    Key::RightShift,
+    Key::RightControl,
+  }};
+
+  const Snapshot snapshot =
+      Snapshot::create(current.get_view(), previous.get_view(), Mapping());
   EXPECT(snapshot.is_current(Key::Shift));
   EXPECT(snapshot.is_current(Key::Control));
   EXPECT_NOT(snapshot.is_pressed(Key::Shift));

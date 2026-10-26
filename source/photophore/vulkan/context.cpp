@@ -415,9 +415,10 @@ auto Context::create(Presentation presentation) -> Context {
   Thread::Bytes terminated_maintenance_extension(maintenance_extension);
   terminated_maintenance_extension.append(0);
 
-  const char* device_extensions[] = {
+  Storage::Vector<const char*, 2> device_extensions = {{
     VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-    Data::cast<const char>(terminated_maintenance_extension.get_data())};
+    Data::cast<const char>(terminated_maintenance_extension.get_data()),
+  }};
 
   // Double precision is optional for image rendering. Context enables the
   // physical device feature when present and records the result. Program
@@ -434,8 +435,8 @@ auto Context::create(Presentation presentation) -> Context {
   device_info.pNext = &sync2;
   device_info.queueCreateInfoCount = 1;
   device_info.pQueueCreateInfos = &queue_info;
-  device_info.enabledExtensionCount = 2;
-  device_info.ppEnabledExtensionNames = device_extensions;
+  device_info.enabledExtensionCount = U32(device_extensions.get_size());
+  device_info.ppEnabledExtensionNames = device_extensions.get_data();
   device_info.pEnabledFeatures = &enabled_features;
 
   if (Dispatch::get().vkCreateDevice(

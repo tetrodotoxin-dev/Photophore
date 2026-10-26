@@ -177,7 +177,7 @@ auto ShaderProgram::create(
   }
 
   // Vulkan reads modules and entry names during pipeline creation. These
-  // temporary arrays retain both through that call, after which the compiled
+  // temporary tables retain both through that call, after which the compiled
   // pipeline contains the executable state used for recording.
   Storage::Vector<VkShaderModule, max_shader_modules> shader_modules;
   Storage::Vector<VkPipelineShaderStageCreateInfo, max_shader_modules> stages;
