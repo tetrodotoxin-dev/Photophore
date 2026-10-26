@@ -42,7 +42,11 @@ format()
 
 snapshot()
 
-validation()
+validation(
+    test_deps = ["//examples:program"],
+    web_test_deps = ["//examples:program_static"],
+    web_threads = False,
+)
 
 # This test runs a full graphical test suite and requires a working Vulkan
 # driver and presentation environment. Linux presentation uses Wayland and

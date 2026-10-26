@@ -74,3 +74,52 @@ VALIDATION_TEST(PlatformPresentation, unavailable) {
       presentation.create_surface(VK_NULL_HANDLE, load_surface, &surface),
       VK_ERROR_INITIALIZATION_FAILED);
 }
+
+VALIDATION_TEST(PlatformPresentation, incomplete_contract) {
+  PresentationProvider provider;
+  Presentation::Operations none;
+  EXPECT_NOT(Presentation::create(&provider, none).is_valid());
+
+  Presentation::Operations missing_surface = {
+    .get_instance_extension = [](void*) { return "VK_TEST_incomplete"_view; },
+  };
+
+  EXPECT_NOT(Presentation::create(&provider, missing_surface).is_valid());
+
+  Presentation::Operations missing_extension = {
+    .create_surface = [](void*, VkInstance, PFN_vkGetInstanceProcAddr,
+                         VkSurfaceKHR*) { return VK_SUCCESS; },
+  };
+
+  EXPECT_NOT(Presentation::create(&provider, missing_extension).is_valid());
+  EXPECT_NOT(Presentation::create(nullptr, missing_extension).is_valid());
+}
+
+// Presentation checks every generic ABI argument before entering provider code.
+// Rejected calls therefore leave the provider's request counter unchanged.
+VALIDATION_TEST(PlatformPresentation, invalid_surface_arguments) {
+  static const Presentation::Operations operations = {
+    .get_instance_extension = [](void*) { return "VK_TEST_surface"_view; },
+    .create_surface =
+        [](void* context, VkInstance, PFN_vkGetInstanceProcAddr,
+           VkSurfaceKHR*) {
+          ++Data::cast<PresentationProvider>(context)->surface_requests;
+          return VK_SUCCESS;
+        },
+  };
+
+  PresentationProvider provider;
+  const Presentation presentation = Presentation::create(&provider, operations);
+  VkSurfaceKHR surface = VK_NULL_HANDLE;
+  const auto instance = Data::bit_cast<VkInstance>(&provider);
+  EXPECT_EQ(
+      presentation.create_surface(VK_NULL_HANDLE, load_surface, &surface),
+      VK_ERROR_INITIALIZATION_FAILED);
+  EXPECT_EQ(
+      presentation.create_surface(instance, nullptr, &surface),
+      VK_ERROR_INITIALIZATION_FAILED);
+  EXPECT_EQ(
+      presentation.create_surface(instance, load_surface, nullptr),
+      VK_ERROR_INITIALIZATION_FAILED);
+  EXPECT_EQ(provider.surface_requests, Count(0));
+}
