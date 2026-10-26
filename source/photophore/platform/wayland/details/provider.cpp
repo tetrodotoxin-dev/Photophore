@@ -37,7 +37,7 @@ auto Wayland::Details::Provider::create(
     U32 width,
     U32 height,
     View::Bytes title) -> Wayland::Details::Provider* {
-  auto* window = create_state<Wayland::Details::Provider>(
+  auto* window = State::create<Wayland::Details::Provider>(
       [] { return Wayland::Details::Provider(); });
   if (!window) {
     return nullptr;
@@ -535,7 +535,7 @@ auto Wayland::Details::Provider::destroy() -> void {
 
   Wayland::Details::Client::disconnect(display);
 
-  destroy_state(this);
+  State::destroy(this);
 }
 
 auto Wayland::Details::Provider::poll_events() -> EventStatus {

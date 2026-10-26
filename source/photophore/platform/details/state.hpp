@@ -12,34 +12,37 @@
 
 namespace Photophore::Platform {
 
-// Platform providers allocate native state through Perimortem's process
-// allocator so every host follows the same construction and release contract.
-// The allocation has enough alignment for any supported provider state. A
-// failed allocation returns null without invoking the factory.
-template <typename Type, typename Factory>
-auto create_state(Factory factory) -> Type* {
-  static_assert(
-      alignof(Type) <=
-      Perimortem::Memory::Allocator::Global::allocation_alignment);
-  auto allocation =
-      Perimortem::Memory::Allocator::Global::allocate(sizeof(Type));
-  if (allocation.get_capacity() < sizeof(Type)) {
-    return nullptr;
+// State gives every native Window provider the same process allocation and
+// construction contract. Supported provider types fit Global's guaranteed
+// alignment. A failed allocation returns null without invoking the factory.
+// Destroy completes the matching object lifetime before releasing its bytes.
+class State {
+ public:
+  template <typename Type, typename Factory>
+  static auto create(Factory factory) -> Type* {
+    static_assert(
+        alignof(Type) <=
+        Perimortem::Memory::Allocator::Global::allocation_alignment);
+    auto allocation =
+        Perimortem::Memory::Allocator::Global::allocate(sizeof(Type));
+    if (allocation.get_capacity() < sizeof(Type)) {
+      return nullptr;
+    }
+
+    return &Toolchain::Memory::Lifetime::construct<Type>(
+        allocation.get_data(), factory);
   }
 
-  return &Toolchain::Memory::Lifetime::construct<Type>(
-      allocation.get_data(), factory);
-}
+  template <typename Type>
+  static auto destroy(Type* value) -> void {
+    if (!value) {
+      return;
+    }
 
-template <typename Type>
-auto destroy_state(Type* value) -> void {
-  if (!value) {
-    return;
+    value->~Type();
+    Perimortem::Memory::Allocator::Global::release(
+        Perimortem::Core::Data::cast<U8>(value));
   }
-
-  value->~Type();
-  Perimortem::Memory::Allocator::Global::release(
-      Perimortem::Core::Data::cast<U8>(value));
-}
+};
 
 }  // namespace Photophore::Platform

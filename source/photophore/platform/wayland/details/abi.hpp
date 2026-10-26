@@ -11,9 +11,11 @@
 
 namespace Photophore::Platform::Wayland::Details::ABI {
 
-// These declarations describe the stable data and function ABI exported by
-// libwayland-client.so.0. Photophore passes each record back to that runtime
-// for message transport and never interprets private Display or Proxy storage.
+// ABI declares the stable records and C language linkage exported by
+// libwayland-client.so.0. The symbols remain at namespace scope because their
+// linkage is the contract Photophore calls. Photophore passes each record back
+// to that runtime for message transport and never interprets private Display or
+// Proxy storage.
 struct Display {};
 struct Proxy {};
 

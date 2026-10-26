@@ -91,7 +91,7 @@ static auto release_window_class() -> void {
 
 auto Win32::Details::Provider::create(U32 width, U32 height, View::Bytes title)
     -> Win32::Details::Provider* {
-  auto* window = create_state<Win32::Details::Provider>(
+  auto* window = State::create<Win32::Details::Provider>(
       [] { return Win32::Details::Provider(); });
   if (!window) {
     return nullptr;
@@ -381,7 +381,7 @@ auto Win32::Details::Provider::destroy() -> void {
     release_window_class();
   }
 
-  destroy_state(this);
+  State::destroy(this);
 }
 
 auto Win32::Details::Provider::poll_events() -> EventStatus {
