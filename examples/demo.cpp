@@ -10,6 +10,7 @@
 #include "perimortem/core/math/scalar.hpp"
 #include "perimortem/core/math/size.hpp"
 #include "perimortem/core/storage/vector.hpp"
+#include "perimortem/core/view/null_terminated.hpp"
 #include "perimortem/memory/matrix.hpp"
 #include "perimortem/memory/thread/bytes.hpp"
 #include "perimortem/memory/thread/vector.hpp"
@@ -209,16 +210,9 @@ static auto advance_bounce(R64 elapsed_seconds, R64& offset, R64& direction)
   }
 }
 
-S32 main(S32 count, char** values) {
+static auto run(Window& window, S32 count, char** values) -> S32 {
   constexpr U32 initial_width = 800;
   constexpr U32 initial_height = 600;
-  Window window(
-      initial_width, initial_height, "Photophore interactive rendering demo");
-  if (window.get_event_status() != Window::EventStatus::Ready) {
-    fputs("Photophore could not create a native window.\n", stderr);
-    return 1;
-  }
-
   configure_controls(window);
 
   Renderer renderer(
@@ -232,7 +226,7 @@ S32 main(S32 count, char** values) {
 
   using DescriptionProgram = decltype(SpriteProgram::get_description());
   const DescriptionProgram description = SpriteProgram::get_description();
-  // Description arrays and their locator have process lifetime in program.cpp.
+  // Description arrays and shader modules have process lifetime in program.cpp.
   // Pipelines borrows this local top level value for the complete render loop.
   const View::Vector<DescriptionProgram> descriptions(description, 1);
   Pipelines pipelines(
@@ -250,7 +244,7 @@ S32 main(S32 count, char** values) {
       Sampler2D::create(
           Sampler2D::Addressing::Clamp, Sampler2D::Filtering::Nearest));
   Texture2D overlay(make_overlay());
-  const Program program = SpriteProgram::get_locator();
+  const Program program = SpriteProgram::get_program();
   const Count frame_limit = read_frame_limit(count, values);
   Count frames = 0;
   R64 controlled_x = 64.0;
@@ -329,4 +323,22 @@ S32 main(S32 count, char** values) {
   renderer.wait_idle();
   printf("Photophore presented %llu frames.\n", frames);
   return 0;
+}
+
+S32 main(S32 count, char** values) {
+  constexpr U32 initial_width = 800;
+  constexpr U32 initial_height = 600;
+
+  return Window::create(
+             initial_width, initial_height,
+             "Photophore interactive rendering demo"_view)
+      .visit(
+          [count, values](Window& window) {
+            return run(window, count, values);
+          },
+
+          [] {
+            fputs("Photophore could not create a native window.\n", stderr);
+            return S32(1);
+          });
 }

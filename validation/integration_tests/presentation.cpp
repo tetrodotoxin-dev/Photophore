@@ -6,18 +6,15 @@
 // than skipping it.
 #include <stdio.h>
 
+#include "perimortem/core/view/null_terminated.hpp"
+
 #include "photophore/platform/window.hpp"
 #include "photophore/vulkan/renderer.hpp"
 
 using namespace Photophore::Platform;
 using namespace Photophore::Vulkan;
 
-S32 main() {
-  Window window(96, 64, "Photophore presentation check");
-  if (window.get_event_status() != Window::EventStatus::Ready) {
-    return 1;
-  }
-
+static auto present(Window& window) -> S32 {
   Renderer renderer(
       window.get_presentation(),
       window.get_logical_width() * window.get_scale(),
@@ -49,4 +46,11 @@ S32 main() {
   renderer.wait_idle();
   printf("Presented %u frames through Vulkan.\n", completed);
   return completed == 3 ? 0 : 4;
+}
+
+S32 main() {
+  return Window::create(96, 64, "Photophore presentation check"_view)
+      .visit(
+          [](Window& window) { return present(window); },
+          [] { return S32(1); });
 }

@@ -1,6 +1,6 @@
 # Copyright (c) 2023-present Matt Kaes and contributors
 
-load("@tetro_toolchain//:defs.bzl", "WINDOWS", "library")
+load("@tetro_toolchain//:defs.bzl", "LINUX", "WINDOWS", "library")
 
 package(default_visibility = ["//visibility:public"])
 
@@ -18,8 +18,11 @@ _LIBRARY = dict(
         ],
         allow_empty = True,
     ),
-    implementation_deps = ["//source/implementation:headers"],
     includes = ["."],
+    linkopts = select({
+        LINUX: ["-lwayland-client"],
+        "//conditions:default": [],
+    }),
     module = "photophore",
 )
 
@@ -70,8 +73,8 @@ library(
     hdrs = _LIBRARY["hdrs"],
     component_deps = _COMPONENT_DEPS,
     components = _COMPONENTS,
-    implementation_deps = _LIBRARY["implementation_deps"],
     includes = _LIBRARY["includes"],
+    linkopts = _LIBRARY["linkopts"],
     module = _LIBRARY["module"],
     deps = [
         "@perimortem_static//:core",
@@ -85,13 +88,20 @@ library(
     name = "photophore_shared",
     srcs = _LIBRARY["srcs"],
     hdrs = _LIBRARY["hdrs"],
-    implementation_deps = _LIBRARY["implementation_deps"],
     includes = _LIBRARY["includes"],
     linkage = "shared",
+    linkopts = [],
     module = _LIBRARY["module"],
     shared_lib_name = select({
         WINDOWS: "photophore.dll",
         "//conditions:default": "libphotophore.so",
+    }),
+    user_link_flags = select({
+        LINUX: [
+            "-L/usr/lib",
+            "-lwayland-client",
+        ],
+        "//conditions:default": [],
     }),
     deps = [
         "@perimortem//:core",

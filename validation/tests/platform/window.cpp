@@ -5,6 +5,8 @@
 
 #include "toolchain/validation/test.hpp"
 
+#include "perimortem/core/view/null_terminated.hpp"
+
 #include "photophore/vulkan/renderer.hpp"
 
 using namespace Photophore::Platform;
@@ -15,17 +17,19 @@ static Harness PlatformWindow = {
   .name = "Window",
 };
 
-VALIDATION_TEST(PlatformWindow, empty_window_fails) {
-  Window window;
-  EXPECT(window.get_event_status() == Window::EventStatus::Failed);
-  EXPECT(window.poll_events() == Window::EventStatus::Failed);
+VALIDATION_TEST(PlatformWindow, explicit_null_title_is_rejected) {
+  constexpr auto title = "Visible\0Hidden"_view;
+  EXPECT_EQ(title.get_size(), Count(14));
+  EXPECT_EQ(title[7], U8(0));
+
+  EXPECT_NOT(Window::create(64, 64, title));
 }
 
 // Absence must stop at acquisition. Asking for a frame from that result must
 // not attempt any native driver calls through an uninitialized context.
 VALIDATION_TEST(PlatformWindow, unavailable_renderer) {
-  Window window;
-  Renderer renderer(window.get_presentation(), 64, 64);
+  Presentation unavailable;
+  Renderer renderer(unavailable, 64, 64);
   EXPECT(renderer.get_context().get_device() == VK_NULL_HANDLE);
 
   Renderer::Frame frame;

@@ -6,8 +6,8 @@
 #include "perimortem/core/diagnostics/log.hpp"
 #include "perimortem/core/view/null_terminated.hpp"
 
-#include "implementation/vulkan/dispatch.hpp"
 #include "photophore/image/sampler_2d.hpp"
+#include "photophore/vulkan/dispatch.hpp"
 
 using namespace Photophore::Vulkan;
 using namespace Perimortem::Core;
@@ -64,7 +64,7 @@ auto Texture::create(
   sampler_info.addressModeV = address_mode;
   sampler_info.addressModeW = address_mode;
   require_success(
-      Dispatch::vkCreateSampler(
+      Dispatch::get().vkCreateSampler(
           context.get_device(), &sampler_info, nullptr, &texture.sampler),
       "Vulkan: Failed to create texture sampler."_view);
 
@@ -82,7 +82,7 @@ auto Texture::create(
   pool_info.poolSizeCount = 1;
   pool_info.pPoolSizes = &pool_size;
   require_success(
-      Dispatch::vkCreateDescriptorPool(
+      Dispatch::get().vkCreateDescriptorPool(
           context.get_device(), &pool_info, nullptr, &texture.descriptor_pool),
       "Vulkan: Failed to create texture descriptor pool."_view);
 
@@ -93,7 +93,7 @@ auto Texture::create(
   set_info.descriptorSetCount = 1;
   set_info.pSetLayouts = &descriptor_set_layout;
   require_success(
-      Dispatch::vkAllocateDescriptorSets(
+      Dispatch::get().vkAllocateDescriptorSets(
           context.get_device(), &set_info, &texture.descriptor_set),
       "Vulkan: Failed to allocate texture descriptor set."_view);
 
@@ -111,7 +111,8 @@ auto Texture::create(
   write.descriptorCount = 1;
   write.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
   write.pImageInfo = &descriptor;
-  Dispatch::vkUpdateDescriptorSets(context.get_device(), 1, &write, 0, nullptr);
+  Dispatch::get().vkUpdateDescriptorSets(
+      context.get_device(), 1, &write, 0, nullptr);
   return texture;
 }
 
@@ -125,8 +126,8 @@ static auto release(
 
   // Destroying the pool releases its descriptor set before the sampler named
   // by that set, preserving their native reference order.
-  Dispatch::vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
-  Dispatch::vkDestroySampler(device, sampler, nullptr);
+  Dispatch::get().vkDestroyDescriptorPool(device, descriptor_pool, nullptr);
+  Dispatch::get().vkDestroySampler(device, sampler, nullptr);
 }
 
 Texture::~Texture() {

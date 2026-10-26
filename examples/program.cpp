@@ -124,7 +124,9 @@ alignas(U32) static constexpr U32 fragment_module[] = {
   50u,         65789u,      65592u,
 };
 
-static constexpr U8 program_locator = 0;
+static constexpr Identity::Uuid program_identity(
+    0xf8f633ad0ed74346ULL,
+    0x9fcf6be1e3be4a90ULL);
 
 // Both shader stages read the same twelve word host block. The vertex stage
 // consumes transform rows while the pixel stage consumes the tone suffix.
@@ -187,14 +189,14 @@ static constexpr VertexInput vertex_inputs[] = {
   {1, 2, sizeof(R32) * 2, sizeof(R32) * 4},
 };
 
-auto SpriteProgram::get_locator() -> decltype(SpriteProgram::get_locator()) {
-  return decltype(SpriteProgram::get_locator())(&program_locator);
+auto SpriteProgram::get_program() -> decltype(SpriteProgram::get_program()) {
+  return decltype(SpriteProgram::get_program())(program_identity);
 }
 
 auto SpriteProgram::get_description()
     -> decltype(SpriteProgram::get_description()) {
   return {
-    .locator = &program_locator,
+    .identity = program_identity,
     .modules = View::Vector<Module>(modules),
     .host_input_ranges = View::Vector<HostInputRange>(host_input_ranges),
     .descriptors = View::Vector<DescriptorBinding>(descriptors),

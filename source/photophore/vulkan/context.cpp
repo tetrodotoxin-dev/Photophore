@@ -7,9 +7,10 @@
 #include "perimortem/core/diagnostics/log.hpp"
 #include "perimortem/core/storage/vector.hpp"
 #include "perimortem/core/view/null_terminated.hpp"
+#include "perimortem/memory/thread/bytes.hpp"
 #include "perimortem/memory/thread/vector.hpp"
 
-#include "implementation/vulkan/dispatch.hpp"
+#include "photophore/vulkan/dispatch.hpp"
 
 using namespace Perimortem::Core;
 using namespace Perimortem::Memory;
@@ -33,8 +34,8 @@ static auto require_success(VkResult result, View::Bytes message) -> void {
 
 static auto instance_layer_available(View::Bytes layer_name) -> Bool {
   U32 layer_count = 0;
-  if (Dispatch::vkEnumerateInstanceLayerProperties(&layer_count, nullptr) !=
-      VK_SUCCESS) {
+  if (Dispatch::get().vkEnumerateInstanceLayerProperties(
+          &layer_count, nullptr) != VK_SUCCESS) {
     return False;
   }
 
@@ -47,7 +48,7 @@ static auto instance_layer_available(View::Bytes layer_name) -> Bool {
 
   U32 read_layer_count = layer_count;
   const VkResult layer_read_result =
-      Dispatch::vkEnumerateInstanceLayerProperties(
+      Dispatch::get().vkEnumerateInstanceLayerProperties(
           &read_layer_count, layers.get_data());
   if (layer_read_result != VK_SUCCESS && layer_read_result != VK_INCOMPLETE) {
     return False;
@@ -71,9 +72,9 @@ static auto read_extensions(VkPhysicalDevice device = VK_NULL_HANDLE)
   // count is authoritative because the extension inventory can change between
   // calls, so the vector shrinks to the entries actually written.
   auto enumerate = [device](U32* count, VkExtensionProperties* properties) {
-    return device ? Dispatch::vkEnumerateDeviceExtensionProperties(
+    return device ? Dispatch::get().vkEnumerateDeviceExtensionProperties(
                         device, nullptr, count, properties)
-                  : Dispatch::vkEnumerateInstanceExtensionProperties(
+                  : Dispatch::get().vkEnumerateInstanceExtensionProperties(
                         nullptr, count, properties);
   };
 
@@ -95,9 +96,14 @@ static auto read_extensions(VkPhysicalDevice device = VK_NULL_HANDLE)
   return extensions;
 }
 
+template <CppSize size>
+static auto vulkan_name(const char (&name)[size]) -> View::Bytes {
+  return View::Bytes(name[0], size - 1);
+}
+
 static auto supports_extension(
     View::Vector<VkExtensionProperties> extensions,
-    const char* name) -> Bool {
+    View::Bytes name) -> Bool {
   // Both names cross fixed C buffers. Bounded conversion preserves the Vulkan
   // limit while comparing the authored bytes rather than their addresses.
   return Bool(
@@ -105,9 +111,7 @@ static auto supports_extension(
           extensions, [name](const VkExtensionProperties& extension) {
             return View::NullTerminated(
                        extension.extensionName, sizeof(extension.extensionName))
-                       .get_view() ==
-                   View::NullTerminated(name, VK_MAX_EXTENSION_NAME_SIZE)
-                       .get_view();
+                       .get_view() == name;
           }) != Count(-1));
 }
 
@@ -116,9 +120,9 @@ static auto select_physical_device(
     VkSurfaceKHR surface,
     Bool khr_surface,
     Bool ext_surface,
-    const char*& maintenance_extension) -> VkPhysicalDevice {
+    View::Bytes& maintenance_extension) -> VkPhysicalDevice {
   U32 physical_device_count = 0;
-  if (Dispatch::vkEnumeratePhysicalDevices(
+  if (Dispatch::get().vkEnumeratePhysicalDevices(
           instance, &physical_device_count, nullptr) != VK_SUCCESS) {
     return VK_NULL_HANDLE;
   }
@@ -131,7 +135,7 @@ static auto select_physical_device(
   physical_devices.forgetful_resize(physical_device_count);
 
   U32 read_physical_device_count = physical_device_count;
-  const auto read = Dispatch::vkEnumeratePhysicalDevices(
+  const auto read = Dispatch::get().vkEnumeratePhysicalDevices(
       instance, &read_physical_device_count, physical_devices.get_data());
   if (read != VK_SUCCESS && read != VK_INCOMPLETE) {
     return VK_NULL_HANDLE;
@@ -148,7 +152,7 @@ static auto select_physical_device(
   VkPhysicalDevice fallback = VK_NULL_HANDLE;
   for (U32 i = 0; i < read_physical_device_count; i++) {
     VkPhysicalDeviceProperties properties = {};
-    Dispatch::vkGetPhysicalDeviceProperties(
+    Dispatch::get().vkGetPhysicalDeviceProperties(
         physical_devices.get_data()[i], &properties);
     if (properties.apiVersion < VK_API_VERSION_1_3) {
       continue;
@@ -156,23 +160,26 @@ static auto select_physical_device(
 
     auto extensions = read_extensions(physical_devices.get_data()[i]);
     if (!supports_extension(
-            extensions.get_view(), VK_KHR_SWAPCHAIN_EXTENSION_NAME)) {
+            extensions.get_view(),
+            vulkan_name(VK_KHR_SWAPCHAIN_EXTENSION_NAME))) {
       continue;
     }
 
-    const char* maintenance = nullptr;
-    if (khr_surface && supports_extension(
-                           extensions.get_view(),
-                           VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME)) {
-      maintenance = VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME;
+    View::Bytes maintenance;
+    if (khr_surface &&
+        supports_extension(
+            extensions.get_view(),
+            vulkan_name(VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME))) {
+      maintenance = vulkan_name(VK_KHR_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME);
     } else if (
-        ext_surface && supports_extension(
-                           extensions.get_view(),
-                           VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME)) {
-      maintenance = VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME;
+        ext_surface &&
+        supports_extension(
+            extensions.get_view(),
+            vulkan_name(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME))) {
+      maintenance = vulkan_name(VK_EXT_SWAPCHAIN_MAINTENANCE_1_EXTENSION_NAME);
     }
 
-    if (!maintenance) {
+    if (maintenance.is_empty()) {
       continue;
     }
 
@@ -187,7 +194,7 @@ static auto select_physical_device(
 
     features.pNext = &capabilities;
     capabilities.pNext = &presentation;
-    Dispatch::vkGetPhysicalDeviceFeatures2(
+    Dispatch::get().vkGetPhysicalDeviceFeatures2(
         physical_devices.get_data()[i], &features);
     if (!capabilities.dynamicRendering || !capabilities.synchronization2 ||
         !presentation.swapchainMaintenance1) {
@@ -198,7 +205,7 @@ static auto select_physical_device(
     // both capabilities here avoids ownership transfers between queue families
     // throughout the frame and swapchain paths.
     U32 queue_family_count = 0;
-    Dispatch::vkGetPhysicalDeviceQueueFamilyProperties(
+    Dispatch::get().vkGetPhysicalDeviceQueueFamilyProperties(
         physical_devices.get_data()[i], &queue_family_count, nullptr);
     if (queue_family_count == 0) {
       continue;
@@ -206,7 +213,7 @@ static auto select_physical_device(
 
     Thread::Vector<VkQueueFamilyProperties> queue_families;
     queue_families.forgetful_resize(queue_family_count);
-    Dispatch::vkGetPhysicalDeviceQueueFamilyProperties(
+    Dispatch::get().vkGetPhysicalDeviceQueueFamilyProperties(
         physical_devices.get_data()[i], &queue_family_count,
         queue_families.get_data());
 
@@ -219,7 +226,7 @@ static auto select_physical_device(
       }
 
       VkBool32 present_supported = VK_FALSE;
-      Dispatch::vkGetPhysicalDeviceSurfaceSupportKHR(
+      Dispatch::get().vkGetPhysicalDeviceSurfaceSupportKHR(
           physical_devices.get_data()[i], queue_family, surface,
           &present_supported);
       if (present_supported) {
@@ -251,7 +258,7 @@ static auto find_graphics_queue_family(
   // first family with both capabilities keeps swapchain images in exclusive
   // sharing mode throughout their lifetime.
   U32 queue_family_count = 0;
-  Dispatch::vkGetPhysicalDeviceQueueFamilyProperties(
+  Dispatch::get().vkGetPhysicalDeviceQueueFamilyProperties(
       physical_device, &queue_family_count, nullptr);
   if (queue_family_count == 0) {
     return U32(-1);
@@ -259,7 +266,7 @@ static auto find_graphics_queue_family(
 
   Thread::Vector<VkQueueFamilyProperties> queue_families;
   queue_families.forgetful_resize(queue_family_count);
-  Dispatch::vkGetPhysicalDeviceQueueFamilyProperties(
+  Dispatch::get().vkGetPhysicalDeviceQueueFamilyProperties(
       physical_device, &queue_family_count, queue_families.get_data());
   for (U32 i = 0; i < queue_family_count; i++) {
     if (!(queue_families.get_data()[i].queueFlags & VK_QUEUE_GRAPHICS_BIT)) {
@@ -267,7 +274,7 @@ static auto find_graphics_queue_family(
     }
 
     VkBool32 present = VK_FALSE;
-    Dispatch::vkGetPhysicalDeviceSurfaceSupportKHR(
+    Dispatch::get().vkGetPhysicalDeviceSurfaceSupportKHR(
         physical_device, i, surface, &present);
     if (present) {
       return i;
@@ -279,11 +286,12 @@ static auto find_graphics_queue_family(
 
 auto Context::create(Presentation presentation) -> Context {
   Context ctx;
-  const char* extension = presentation.get_instance_extension();
+  const View::Bytes extension = presentation.get_instance_extension();
   // The provider declares its instance extension before loader acquisition. A
   // valid Presentation and one Vulkan reservation establish the native entry
   // conditions for every handle published through ctx.
-  if (!presentation.is_valid() || !extension || !Dispatch::acquire()) {
+  if (!presentation.is_valid() || extension.is_empty() ||
+      !Dispatch::acquire()) {
     return ctx;
   }
 
@@ -295,20 +303,26 @@ auto Context::create(Presentation presentation) -> Context {
 
   auto available = read_extensions();
   Bool khr_surface = supports_extension(
-      available.get_view(), VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
+      available.get_view(),
+      vulkan_name(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME));
   Bool ext_surface = supports_extension(
-      available.get_view(), VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME);
+      available.get_view(),
+      vulkan_name(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME));
   if ((!khr_surface && !ext_surface) ||
       !supports_extension(
           available.get_view(),
-          VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME)) {
+          vulkan_name(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME))) {
     return Context();
   }
+
+  Thread::Bytes terminated_extension(extension);
+  terminated_extension.append(0);
 
   Storage::Vector<const char*, 5> instance_extensions;
   Count extension_count = 0;
   instance_extensions[extension_count++] = VK_KHR_SURFACE_EXTENSION_NAME;
-  instance_extensions[extension_count++] = extension;
+  instance_extensions[extension_count++] =
+      Data::cast<const char>(terminated_extension.get_data());
   instance_extensions[extension_count++] =
       VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME;
   if (khr_surface) {
@@ -343,20 +357,20 @@ auto Context::create(Presentation presentation) -> Context {
   // Each successful creation writes its handle directly into ctx. Returning an
   // empty Context moves that partial state into its destructor, so every later
   // failure releases the handles already created in reverse order.
-  if (Dispatch::vkCreateInstance(&instance_info, nullptr, &ctx.instance) !=
-      VK_SUCCESS) {
+  if (Dispatch::get().vkCreateInstance(
+          &instance_info, nullptr, &ctx.instance) != VK_SUCCESS) {
     ctx.instance = VK_NULL_HANDLE;
     return Context();
   }
 
   if (presentation.create_surface(
-          ctx.instance, Dispatch::vkGetInstanceProcAddr, &ctx.surface) !=
+          ctx.instance, Dispatch::get().vkGetInstanceProcAddr, &ctx.surface) !=
       VK_SUCCESS) {
     ctx.surface = VK_NULL_HANDLE;
     return Context();
   }
 
-  const char* maintenance_extension = nullptr;
+  View::Bytes maintenance_extension;
   // Device selection proves the feature and queue profile before logical
   // device creation. The selected extension spelling then follows that exact
   // physical device into VkDeviceCreateInfo.
@@ -398,14 +412,18 @@ auto Context::create(Presentation presentation) -> Context {
   presentation_features.swapchainMaintenance1 = VK_TRUE;
   dynamic_rendering.pNext = &presentation_features;
 
+  Thread::Bytes terminated_maintenance_extension(maintenance_extension);
+  terminated_maintenance_extension.append(0);
+
   const char* device_extensions[] = {
-    VK_KHR_SWAPCHAIN_EXTENSION_NAME, maintenance_extension};
+    VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+    Data::cast<const char>(terminated_maintenance_extension.get_data())};
 
   // Double precision is optional for image rendering. Context enables the
   // physical device feature when present and records the result. Program
   // validation then rejects a description requiring float64 on another device.
   VkPhysicalDeviceFeatures available_features = {};
-  Dispatch::vkGetPhysicalDeviceFeatures(
+  Dispatch::get().vkGetPhysicalDeviceFeatures(
       ctx.physical_device, &available_features);
 
   VkPhysicalDeviceFeatures enabled_features = {};
@@ -420,14 +438,14 @@ auto Context::create(Presentation presentation) -> Context {
   device_info.ppEnabledExtensionNames = device_extensions;
   device_info.pEnabledFeatures = &enabled_features;
 
-  if (Dispatch::vkCreateDevice(
+  if (Dispatch::get().vkCreateDevice(
           ctx.physical_device, &device_info, nullptr, &ctx.device) !=
       VK_SUCCESS) {
     ctx.device = VK_NULL_HANDLE;
     return Context();
   }
 
-  Dispatch::vkGetDeviceQueue(
+  Dispatch::get().vkGetDeviceQueue(
       ctx.device, ctx.graphics_queue_family, 0, &ctx.graphics_queue);
 
   // Immediate uploads and Renderer frame slots allocate primary command buffers
@@ -439,7 +457,7 @@ auto Context::create(Presentation presentation) -> Context {
 
   pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
   pool_info.queueFamilyIndex = ctx.graphics_queue_family;
-  if (Dispatch::vkCreateCommandPool(
+  if (Dispatch::get().vkCreateCommandPool(
           ctx.device, &pool_info, nullptr, &ctx.command_pool) != VK_SUCCESS) {
     ctx.command_pool = VK_NULL_HANDLE;
     return Context();
@@ -454,19 +472,19 @@ auto Context::create(Presentation presentation) -> Context {
 // it.
 Context::~Context() {
   if (command_pool) {
-    Dispatch::vkDestroyCommandPool(device, command_pool, nullptr);
+    Dispatch::get().vkDestroyCommandPool(device, command_pool, nullptr);
   }
 
   if (device) {
-    Dispatch::vkDestroyDevice(device, nullptr);
+    Dispatch::get().vkDestroyDevice(device, nullptr);
   }
 
   if (surface) {
-    Dispatch::vkDestroySurfaceKHR(instance, surface, nullptr);
+    Dispatch::get().vkDestroySurfaceKHR(instance, surface, nullptr);
   }
 
   if (instance) {
-    Dispatch::vkDestroyInstance(instance, nullptr);
+    Dispatch::get().vkDestroyInstance(instance, nullptr);
   }
 
   if (owns_loader) {
@@ -540,7 +558,8 @@ auto Context::begin_immediate_commands() const -> VkCommandBuffer {
 
   VkCommandBuffer command_buffer = VK_NULL_HANDLE;
   require_success(
-      Dispatch::vkAllocateCommandBuffers(device, &allocation, &command_buffer),
+      Dispatch::get().vkAllocateCommandBuffers(
+          device, &allocation, &command_buffer),
       "Vulkan: Failed to allocate immediate command buffer."_view);
 
   VkCommandBufferBeginInfo begin_info = {
@@ -548,7 +567,7 @@ auto Context::begin_immediate_commands() const -> VkCommandBuffer {
 
   begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
   require_success(
-      Dispatch::vkBeginCommandBuffer(command_buffer, &begin_info),
+      Dispatch::get().vkBeginCommandBuffer(command_buffer, &begin_info),
       "Vulkan: Failed to begin immediate command buffer."_view);
   return command_buffer;
 }
@@ -559,26 +578,27 @@ auto Context::submit_immediate_commands(VkCommandBuffer command_buffer) const
   // the command buffer here keeps that synchronous cost and lifetime in the
   // same operation that submits it.
   require_success(
-      Dispatch::vkEndCommandBuffer(command_buffer),
+      Dispatch::get().vkEndCommandBuffer(command_buffer),
       "Vulkan: Failed to end immediate command buffer."_view);
 
   VkSubmitInfo submit = {VK_STRUCTURE_TYPE_SUBMIT_INFO};
   submit.commandBufferCount = 1;
   submit.pCommandBuffers = &command_buffer;
   require_success(
-      Dispatch::vkQueueSubmit(graphics_queue, 1, &submit, VK_NULL_HANDLE),
+      Dispatch::get().vkQueueSubmit(graphics_queue, 1, &submit, VK_NULL_HANDLE),
       "Vulkan: Failed to submit immediate command buffer."_view);
   require_success(
-      Dispatch::vkQueueWaitIdle(graphics_queue),
+      Dispatch::get().vkQueueWaitIdle(graphics_queue),
       "Vulkan: Failed to wait for immediate command buffer."_view);
-  Dispatch::vkFreeCommandBuffers(device, command_pool, 1, &command_buffer);
+  Dispatch::get().vkFreeCommandBuffers(
+      device, command_pool, 1, &command_buffer);
 }
 
 auto Context::find_memory_type(
     U32 type_filter,
     VkMemoryPropertyFlags properties) const -> U32 {
   VkPhysicalDeviceMemoryProperties memory_properties = {};
-  Dispatch::vkGetPhysicalDeviceMemoryProperties(
+  Dispatch::get().vkGetPhysicalDeviceMemoryProperties(
       physical_device, &memory_properties);
   for (U32 i = 0; i < memory_properties.memoryTypeCount; i++) {
     const Bool type_matches = Bool((type_filter & (1u << i)) != 0);

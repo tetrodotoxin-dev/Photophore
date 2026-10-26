@@ -26,7 +26,7 @@ namespace Photophore::Vulkan {
 //
 // Construction stores references to a live Context and the complete Program
 // inventory, including every nested View and name. Both remain accessible until
-// Pipelines destruction. Each locator has a stable, unique address within the
+// Pipelines destruction. Each Program identity is set and unique within the
 // inventory. `rebuild` replaces shader realizations after a swapchain color
 // format change while preserving uploaded images and descriptor sets.
 //
@@ -78,7 +78,7 @@ class Pipelines {
   };
 
   struct ProgramEntry {
-    // Stores one VkPipeline selected by Program address and fixed draw state.
+    // Stores one VkPipeline selected by Program identity and fixed draw state.
     const Description::Program* description = nullptr;
     Frame::Pipeline pipeline;
     ShaderProgram shader;

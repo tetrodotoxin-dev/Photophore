@@ -8,7 +8,7 @@
 #include "perimortem/core/view/null_terminated.hpp"
 #include "perimortem/memory/thread/vector.hpp"
 
-#include "implementation/vulkan/dispatch.hpp"
+#include "photophore/vulkan/dispatch.hpp"
 
 using namespace Perimortem::Core;
 using namespace Photophore::Vulkan;
@@ -37,7 +37,7 @@ static auto choose_surface_format(
   // format and color space pair becomes the device selected fallback.
   U32 surface_format_count = 0;
   require_success(
-      Dispatch::vkGetPhysicalDeviceSurfaceFormatsKHR(
+      Dispatch::get().vkGetPhysicalDeviceSurfaceFormatsKHR(
           physical_device, surface, &surface_format_count, nullptr),
       "Vulkan: Failed to query swapchain surface formats."_view);
   if (surface_format_count == 0) {
@@ -49,7 +49,7 @@ static auto choose_surface_format(
 
   U32 read_surface_format_count = surface_format_count;
   require_enumeration_read(
-      Dispatch::vkGetPhysicalDeviceSurfaceFormatsKHR(
+      Dispatch::get().vkGetPhysicalDeviceSurfaceFormatsKHR(
           physical_device, surface, &read_surface_format_count,
           surface_formats.get_data()),
       "Vulkan: Failed to read swapchain surface formats."_view);
@@ -82,7 +82,7 @@ static auto choose_present_mode(
     VkSurfaceKHR surface) -> VkPresentModeKHR {
   U32 present_mode_count = 0;
   require_success(
-      Dispatch::vkGetPhysicalDeviceSurfacePresentModesKHR(
+      Dispatch::get().vkGetPhysicalDeviceSurfacePresentModesKHR(
           physical_device, surface, &present_mode_count, nullptr),
       "Vulkan: Failed to query swapchain present modes."_view);
   if (present_mode_count == 0) {
@@ -94,7 +94,7 @@ static auto choose_present_mode(
 
   U32 read_present_mode_count = present_mode_count;
   require_enumeration_read(
-      Dispatch::vkGetPhysicalDeviceSurfacePresentModesKHR(
+      Dispatch::get().vkGetPhysicalDeviceSurfacePresentModesKHR(
           physical_device, surface, &read_present_mode_count,
           present_modes.get_data()),
       "Vulkan: Failed to read swapchain present modes."_view);
@@ -135,7 +135,7 @@ static auto build(
 
   VkSurfaceCapabilitiesKHR surface_capabilities = {};
   require_success(
-      Dispatch::vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
+      Dispatch::get().vkGetPhysicalDeviceSurfaceCapabilitiesKHR(
           ctx.get_physical_device(), surface, &surface_capabilities),
       "Vulkan: Failed to query swapchain surface capabilities."_view);
 
@@ -187,14 +187,14 @@ static auto build(
   swapchain_info.oldSwapchain = old_swapchain;
 
   require_success(
-      Dispatch::vkCreateSwapchainKHR(
+      Dispatch::get().vkCreateSwapchainKHR(
           swapchain_state.device, &swapchain_info, nullptr,
           &swapchain_state.swapchain),
       "Vulkan: Failed to create swapchain."_view);
 
   swapchain_state.image_count = 0;
   require_success(
-      Dispatch::vkGetSwapchainImagesKHR(
+      Dispatch::get().vkGetSwapchainImagesKHR(
           swapchain_state.device, swapchain_state.swapchain,
           &swapchain_state.image_count, nullptr),
       "Vulkan: Failed to query swapchain images."_view);
@@ -203,7 +203,7 @@ static auto build(
   }
 
   require_enumeration_read(
-      Dispatch::vkGetSwapchainImagesKHR(
+      Dispatch::get().vkGetSwapchainImagesKHR(
           swapchain_state.device, swapchain_state.swapchain,
           &swapchain_state.image_count, swapchain_state.images.get_data()),
       "Vulkan: Failed to read swapchain images."_view);
@@ -226,7 +226,7 @@ static auto build(
     image_view_info.subresourceRange.baseArrayLayer = 0;
     image_view_info.subresourceRange.layerCount = 1;
     require_success(
-        Dispatch::vkCreateImageView(
+        Dispatch::get().vkCreateImageView(
             swapchain_state.device, &image_view_info, nullptr,
             &swapchain_state.image_views[i]),
         "Vulkan: Failed to create swapchain image view."_view);
@@ -241,11 +241,12 @@ static auto destroy(const auto& storage) -> void {
   }
 
   for (U32 index = 0; index < storage.image_count; index++) {
-    Dispatch::vkDestroyImageView(
+    Dispatch::get().vkDestroyImageView(
         storage.device, storage.image_views[index], nullptr);
   }
 
-  Dispatch::vkDestroySwapchainKHR(storage.device, storage.swapchain, nullptr);
+  Dispatch::get().vkDestroySwapchainKHR(
+      storage.device, storage.swapchain, nullptr);
 }
 
 auto Swapchain::create(const Context& ctx, U32 width, U32 height) -> Swapchain {
@@ -297,7 +298,7 @@ auto Swapchain::operator=(Swapchain&& other) noexcept -> Swapchain& {
 
 auto Swapchain::acquire_next_image(VkSemaphore signal_semaphore) const -> U32 {
   U32 index = 0;
-  const VkResult result = Dispatch::vkAcquireNextImageKHR(
+  const VkResult result = Dispatch::get().vkAcquireNextImageKHR(
       storage.device, storage.swapchain, U64(-1), signal_semaphore,
       VK_NULL_HANDLE, &index);
   if (result == VK_ERROR_OUT_OF_DATE_KHR) {

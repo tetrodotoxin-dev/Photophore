@@ -3,6 +3,7 @@
 
 #pragma once
 
+#include "perimortem/core/identity/uuid.hpp"
 #include "perimortem/core/view/vector.hpp"
 
 #include "photophore/description/descriptor_binding.hpp"
@@ -15,20 +16,20 @@ namespace Photophore::Description {
 
 // Program is the complete compiled input to one Vulkan pipeline family. It
 // joins executable SPIR V modules with the descriptor, vertex and host layouts
-// those modules consume. Frame::Batch selects this product through locator and
+// those modules consume. Frame::Batch selects this product through identity and
 // supplies its changing resources, placement and parameter bytes.
 //
 // Every nested array, name and module remains accessible while a Pipelines
-// instance uses this Program. `locator` is a stable address token shared with
-// Frame::Program and is unique within one inventory. Pipelines compares that
-// address and never reads the referenced byte.
+// instance uses this Program. The producer assigns a nonzero identity that is
+// unique within that inventory. Frame::Program carries the same value without
+// acquiring the description or its nested storage.
 //
 // `host_size` covers the complete push input block. `parameters_offset` and
 // `parameters_size` locate the contiguous region copied from each batch, while
 // HostField entries fill placement values around that region. HostInputRange
 // entries publish the stage visibility expected by the compiled modules.
 struct Program {
-  const U8* locator = nullptr;
+  Perimortem::Core::Identity::Uuid identity;
   Perimortem::Core::View::Vector<Module> modules;
   Perimortem::Core::View::Vector<HostInputRange> host_input_ranges;
   Perimortem::Core::View::Vector<DescriptorBinding> descriptors;

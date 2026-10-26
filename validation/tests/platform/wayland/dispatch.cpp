@@ -250,54 +250,66 @@ VALIDATION_TEST(WaylandDispatch, protocol_events) {
   char descriptor[32];
   snprintf(descriptor, sizeof(descriptor), "%d", sockets[0]);
   setenv("WAYLAND_SOCKET", descriptor, 1);
-  {
-    Window window(96, 64, "Private protocol check");
-    if (restore_previous) {
-      setenv("WAYLAND_SOCKET", saved, 1);
-    } else {
-      unsetenv("WAYLAND_SOCKET");
-    }
 
-    using Key = Key;
-    Bool observed = false;
-    for (U32 attempt = 0; attempt < 1000 && !observed; ++attempt) {
-      window.poll_events();
-      observed = window.get_input().get_pointer().scroll_y == 3;
-      if (!observed) {
-        usleep(1000);
-      }
-    }
-
-    EXPECT(observed);
-    EXPECT_EQ(window.get_logical_width(), 400u);
-    EXPECT_EQ(window.get_logical_height(), 300u);
-    EXPECT_EQ(window.get_scale(), 2u);
-    EXPECT(window.get_input().is_current(Key::A));
-    EXPECT(window.get_input().is_current(Key::B));
-    EXPECT(window.get_input().is_current(Key::MousePrimary));
-    EXPECT_EQ(window.get_input().get_pointer().x, 9.0f);
-    EXPECT_EQ(window.get_input().get_pointer().y, -7.0f);
-    char byte;
-    EXPECT(read(pipe_fds[0], &byte, 1) == 0);
-    close(pipe_fds[0]);
-
-    // Flush replies before checking peer counters. Completion is published
-    // after the acknowledgement and its following commit reach the peer.
-    window.poll_events();
-    for (U32 attempt = 0;
-         attempt < 1000 && !__atomic_load_n(&peer.completed, __ATOMIC_ACQUIRE);
-         ++attempt) {
-      usleep(1000);
-    }
-
-    shutdown(peer.socket, SHUT_RD);
-    pthread_join(peer.thread, nullptr);
-    peer.started = false;
-    EXPECT(peer.okay);
-    EXPECT(peer.pong);
-    EXPECT(peer.acknowledged);
-    EXPECT(peer.committed);
+  auto available = Window::create(96, 64, "Private protocol check"_view);
+  if (restore_previous) {
+    setenv("WAYLAND_SOCKET", saved, 1);
+  } else {
+    unsetenv("WAYLAND_SOCKET");
   }
+
+  Bool created = False;
+  available.visit(
+      [&](Window& selected) {
+        // A second move after creation proves that every native callback and
+        // input destination follows the published Window value.
+        Window window(Data::take(selected));
+        created = True;
+
+        Bool observed = false;
+        for (U32 attempt = 0; attempt < 1000 && !observed; ++attempt) {
+          window.poll_events();
+          observed = window.get_input().get_pointer().scroll_y == 3;
+          if (!observed) {
+            usleep(1000);
+          }
+        }
+
+        EXPECT(observed);
+        EXPECT_EQ(window.get_logical_width(), 400u);
+        EXPECT_EQ(window.get_logical_height(), 300u);
+        EXPECT_EQ(window.get_scale(), 2u);
+        EXPECT(window.get_input().is_current(Key::A));
+        EXPECT(window.get_input().is_current(Key::B));
+        EXPECT(window.get_input().is_current(Key::MousePrimary));
+        EXPECT_EQ(window.get_input().get_pointer().x, 9.0f);
+        EXPECT_EQ(window.get_input().get_pointer().y, -7.0f);
+
+        char byte;
+        EXPECT(read(pipe_fds[0], &byte, 1) == 0);
+
+        // Flush replies before checking peer counters. Completion is published
+        // after the acknowledgement and its following commit reach the peer.
+        window.poll_events();
+        for (U32 attempt = 0;
+             attempt < 1000 &&
+             !__atomic_load_n(&peer.completed, __ATOMIC_ACQUIRE);
+             ++attempt) {
+          usleep(1000);
+        }
+      },
+
+      [] {});
+
+  EXPECT(created);
+  close(pipe_fds[0]);
+  shutdown(peer.socket, SHUT_RD);
+  pthread_join(peer.thread, nullptr);
+  peer.started = false;
+  EXPECT(peer.okay);
+  EXPECT(peer.pong);
+  EXPECT(peer.acknowledged);
+  EXPECT(peer.committed);
 }
 
 #endif

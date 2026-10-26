@@ -7,6 +7,8 @@
 
 #include "toolchain/toolchain.hpp"
 
+#include "perimortem/core/view/bytes.hpp"
+
 namespace Photophore::Platform {
 
 // Presentation lets a Window provider create the Vulkan surface for its native
@@ -24,7 +26,8 @@ namespace Photophore::Platform {
 class Presentation {
  public:
   struct Operations {
-    const char* (*get_instance_extension)(void* context) = nullptr;
+    Perimortem::Core::View::Bytes (*get_instance_extension)(void* context) =
+        nullptr;
     VkResult (*create_surface)(
         void* context,
         VkInstance instance,
@@ -48,8 +51,10 @@ class Presentation {
         operations->create_surface);
   }
 
-  constexpr auto get_instance_extension() const -> const char* {
-    return is_valid() ? operations->get_instance_extension(context) : nullptr;
+  constexpr auto get_instance_extension() const
+      -> Perimortem::Core::View::Bytes {
+    return is_valid() ? operations->get_instance_extension(context)
+                      : Perimortem::Core::View::Bytes();
   }
 
   constexpr auto create_surface(

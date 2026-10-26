@@ -6,7 +6,7 @@
 #include "perimortem/core/diagnostics/log.hpp"
 #include "perimortem/core/view/null_terminated.hpp"
 
-#include "implementation/vulkan/dispatch.hpp"
+#include "photophore/vulkan/dispatch.hpp"
 
 using namespace Perimortem::Core;
 using namespace Photophore::Vulkan;
@@ -29,13 +29,13 @@ static auto allocate_frames(const Context& context, auto& frames) -> void {
   for (Count index = 0; index < frames.get_size(); index++) {
     auto& frame = frames[index];
     require_success(
-        Dispatch::vkAllocateCommandBuffers(
+        Dispatch::get().vkAllocateCommandBuffers(
             context.get_device(), &allocation, &frame.command_buffer),
         "Photophore: Failed to allocate a frame command buffer."_view);
 
     VkSemaphoreCreateInfo semaphore = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
     require_success(
-        Dispatch::vkCreateSemaphore(
+        Dispatch::get().vkCreateSemaphore(
             context.get_device(), &semaphore, nullptr, &frame.image_available),
         "Photophore: Failed to create an acquisition semaphore."_view);
 
@@ -44,7 +44,7 @@ static auto allocate_frames(const Context& context, auto& frames) -> void {
     // and reset sequence as every completed submission that follows it.
     fence.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     require_success(
-        Dispatch::vkCreateFence(
+        Dispatch::get().vkCreateFence(
             context.get_device(), &fence, nullptr, &frame.fence),
         "Photophore: Failed to create a submission fence."_view);
   }
@@ -54,11 +54,12 @@ static auto destroy_frames(const Context& context, auto& frames) -> void {
   for (Count index = 0; index < frames.get_size(); index++) {
     auto& frame = frames[index];
     if (frame.fence) {
-      Dispatch::vkDestroyFence(context.get_device(), frame.fence, nullptr);
+      Dispatch::get().vkDestroyFence(
+          context.get_device(), frame.fence, nullptr);
     }
 
     if (frame.image_available) {
-      Dispatch::vkDestroySemaphore(
+      Dispatch::get().vkDestroySemaphore(
           context.get_device(), frame.image_available, nullptr);
     }
 
@@ -78,14 +79,14 @@ static auto allocate_presentations(
     auto& presentation = presentations[index];
     VkSemaphoreCreateInfo semaphore = {VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO};
     require_success(
-        Dispatch::vkCreateSemaphore(
+        Dispatch::get().vkCreateSemaphore(
             context.get_device(), &semaphore, nullptr,
             &presentation.render_finished),
         "Photophore: Failed to create a presentation semaphore."_view);
 
     VkFenceCreateInfo fence = {VK_STRUCTURE_TYPE_FENCE_CREATE_INFO};
     require_success(
-        Dispatch::vkCreateFence(
+        Dispatch::get().vkCreateFence(
             context.get_device(), &fence, nullptr, &presentation.completion),
         "Photophore: Failed to create a presentation fence."_view);
   }
@@ -98,7 +99,7 @@ static auto wait_for_presentation(const Context& context, auto& presentation)
   }
 
   require_success(
-      Dispatch::vkWaitForFences(
+      Dispatch::get().vkWaitForFences(
           context.get_device(), 1, &presentation.completion, VK_TRUE, U64(-1)),
       "Photophore: Failed to wait for presentation."_view);
   presentation.pending = False;
@@ -109,12 +110,12 @@ static auto destroy_presentations(const Context& context, auto& presentations)
   for (Count index = 0; index < presentations.get_size(); index++) {
     auto& presentation = presentations[index];
     if (presentation.render_finished) {
-      Dispatch::vkDestroySemaphore(
+      Dispatch::get().vkDestroySemaphore(
           context.get_device(), presentation.render_finished, nullptr);
     }
 
     if (presentation.completion) {
-      Dispatch::vkDestroyFence(
+      Dispatch::get().vkDestroyFence(
           context.get_device(), presentation.completion, nullptr);
     }
 
@@ -132,7 +133,7 @@ static auto begin_rendering(
 
   begin_info.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
   require_success(
-      Dispatch::vkBeginCommandBuffer(frame.command_buffer, &begin_info),
+      Dispatch::get().vkBeginCommandBuffer(frame.command_buffer, &begin_info),
       "Renderer: Failed to begin command buffer."_view);
 
   // Every frame clears its color image, making undefined the correct source
@@ -155,7 +156,8 @@ static auto begin_rendering(
   VkDependencyInfo attachment_dependency = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
   attachment_dependency.imageMemoryBarrierCount = 1;
   attachment_dependency.pImageMemoryBarriers = &to_attachment;
-  Dispatch::vkCmdPipelineBarrier2(frame.command_buffer, &attachment_dependency);
+  Dispatch::get().vkCmdPipelineBarrier2(
+      frame.command_buffer, &attachment_dependency);
 
   VkRenderingAttachmentInfo color_attachment = {
     VK_STRUCTURE_TYPE_RENDERING_ATTACHMENT_INFO};
@@ -172,15 +174,15 @@ static auto begin_rendering(
   rendering.layerCount = 1;
   rendering.colorAttachmentCount = 1;
   rendering.pColorAttachments = &color_attachment;
-  Dispatch::vkCmdBeginRendering(frame.command_buffer, &rendering);
+  Dispatch::get().vkCmdBeginRendering(frame.command_buffer, &rendering);
 
   const VkViewport viewport = {0.0f, 0.0f, R32(frame.width), R32(frame.height),
                                0.0f, 1.0f};
 
-  Dispatch::vkCmdSetViewport(frame.command_buffer, 0, 1, &viewport);
+  Dispatch::get().vkCmdSetViewport(frame.command_buffer, 0, 1, &viewport);
 
   const VkRect2D scissor = {{0, 0}, extent};
-  Dispatch::vkCmdSetScissor(frame.command_buffer, 0, 1, &scissor);
+  Dispatch::get().vkCmdSetScissor(frame.command_buffer, 0, 1, &scissor);
 }
 
 static auto finish_rendering(
@@ -189,7 +191,7 @@ static auto finish_rendering(
   // The final barrier makes color attachment writes visible before the
   // presentation engine reads this image. Ending dynamic rendering first
   // completes the attachment use recorded in the same command buffer.
-  Dispatch::vkCmdEndRendering(frame.command_buffer);
+  Dispatch::get().vkCmdEndRendering(frame.command_buffer);
 
   VkImageMemoryBarrier2 to_present = {VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2};
   to_present.srcStageMask = VK_PIPELINE_STAGE_2_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -206,9 +208,10 @@ static auto finish_rendering(
   VkDependencyInfo present_dependency = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
   present_dependency.imageMemoryBarrierCount = 1;
   present_dependency.pImageMemoryBarriers = &to_present;
-  Dispatch::vkCmdPipelineBarrier2(frame.command_buffer, &present_dependency);
+  Dispatch::get().vkCmdPipelineBarrier2(
+      frame.command_buffer, &present_dependency);
   require_success(
-      Dispatch::vkEndCommandBuffer(frame.command_buffer),
+      Dispatch::get().vkEndCommandBuffer(frame.command_buffer),
       "Renderer: Failed to end command buffer."_view);
 }
 
@@ -237,7 +240,7 @@ auto Renderer::begin_frame(Frame& frame) -> Bool {
 
   auto& state = frames[current_frame];
   require_success(
-      Dispatch::vkWaitForFences(
+      Dispatch::get().vkWaitForFences(
           context.get_device(), 1, &state.fence, VK_TRUE, U64(-1)),
       "Photophore: Failed to wait for a frame slot."_view);
 
@@ -257,10 +260,10 @@ auto Renderer::begin_frame(Frame& frame) -> Bool {
   // cycle.
   ++state.generation;
   require_success(
-      Dispatch::vkResetFences(context.get_device(), 1, &state.fence),
+      Dispatch::get().vkResetFences(context.get_device(), 1, &state.fence),
       "Photophore: Failed to reset a submission fence."_view);
   require_success(
-      Dispatch::vkResetCommandBuffer(state.command_buffer, 0),
+      Dispatch::get().vkResetCommandBuffer(state.command_buffer, 0),
       "Photophore: Failed to reset a command buffer."_view);
   frame.command_buffer = state.command_buffer;
   frame.completion = state.fence;
@@ -293,12 +296,12 @@ auto Renderer::end_frame(const Frame& frame) -> void {
   submit.signalSemaphoreCount = 1;
   submit.pSignalSemaphores = &presentation.render_finished;
   require_success(
-      Dispatch::vkQueueSubmit(
+      Dispatch::get().vkQueueSubmit(
           context.get_graphics_queue(), 1, &submit, state.fence),
       "Photophore: Failed to submit a frame."_view);
 
   require_success(
-      Dispatch::vkResetFences(
+      Dispatch::get().vkResetFences(
           context.get_device(), 1, &presentation.completion),
       "Photophore: Failed to reset a presentation fence."_view);
 
@@ -318,7 +321,7 @@ auto Renderer::end_frame(const Frame& frame) -> void {
   present.pImageIndices = &frame.image_index;
 
   const VkResult result =
-      Dispatch::vkQueuePresentKHR(context.get_graphics_queue(), &present);
+      Dispatch::get().vkQueuePresentKHR(context.get_graphics_queue(), &present);
   if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR &&
       result != VK_ERROR_OUT_OF_DATE_KHR) {
     Diagnostics::Log::fatal("Photophore: Failed to present a frame."_view);
@@ -336,7 +339,7 @@ auto Renderer::wait_idle() -> void {
   }
 
   require_success(
-      Dispatch::vkDeviceWaitIdle(context.get_device()),
+      Dispatch::get().vkDeviceWaitIdle(context.get_device()),
       "Photophore: Failed to wait for rendering."_view);
   // Device idle completes queue submissions. Presentation fences extend that
   // proof through the presentation engine's payload references, making every

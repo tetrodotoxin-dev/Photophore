@@ -1,7 +1,7 @@
 // # Tetrodotoxin
 // Copyright (c) 2023-present Matt Kaes and contributors
 
-#include "implementation/vulkan/dispatch.hpp"
+#include "photophore/vulkan/dispatch.hpp"
 
 #ifndef TOOLCHAIN_WASM
 #include "toolchain/memory/lifetime.hpp"
@@ -16,10 +16,7 @@
 using namespace Perimortem::Core;
 using namespace Photophore::Vulkan;
 
-#define PHOTOPHORE_VULKAN(name) PFN_##name Dispatch::name = nullptr;
-
-#include "implementation/vulkan/functions.hpp"
-#undef PHOTOPHORE_VULKAN
+Dispatch Dispatch::functions;
 
 #ifndef TOOLCHAIN_WASM
 
@@ -42,6 +39,10 @@ static auto release_loader() -> void {
 }
 
 #endif
+
+auto Dispatch::get() -> const Dispatch& {
+  return functions;
+}
 
 // `symbol` runs while `acquire` holds loader_mutex and the Vulkan module is
 // loaded. A failed lookup returns null, causing the complete function inventory
@@ -114,20 +115,230 @@ auto Dispatch::acquire() -> Bool {
     return False;
   }
 
-  bool complete = true;
+  Dispatch available;
+  auto load = []<typename Function>(
+                  Function& function, View::Bytes name) -> Bool {
+    function = Data::bit_cast<Function>(Dispatch::symbol(name));
+    return function != nullptr;
+  };
 
-#define PHOTOPHORE_VULKAN(name)                                           \
-  name = Data::bit_cast<PFN_##name>(                                      \
-      symbol(View::NullTerminated(#name, sizeof(#name) - 1).get_view())); \
-  complete = complete && name;
-
-#include "implementation/vulkan/functions.hpp"
-#undef PHOTOPHORE_VULKAN
+  Bool complete = True;
+  complete =
+      load(available.vkAcquireNextImageKHR, "vkAcquireNextImageKHR"_view) &&
+      complete;
+  complete = load(
+                 available.vkAllocateCommandBuffers,
+                 "vkAllocateCommandBuffers"_view) &&
+             complete;
+  complete = load(
+                 available.vkAllocateDescriptorSets,
+                 "vkAllocateDescriptorSets"_view) &&
+             complete;
+  complete =
+      load(available.vkAllocateMemory, "vkAllocateMemory"_view) && complete;
+  complete =
+      load(available.vkBeginCommandBuffer, "vkBeginCommandBuffer"_view) &&
+      complete;
+  complete =
+      load(available.vkBindBufferMemory, "vkBindBufferMemory"_view) && complete;
+  complete =
+      load(available.vkBindImageMemory, "vkBindImageMemory"_view) && complete;
+  complete = load(available.vkCmdBeginRendering, "vkCmdBeginRendering"_view) &&
+             complete;
+  complete =
+      load(available.vkCmdBindDescriptorSets, "vkCmdBindDescriptorSets"_view) &&
+      complete;
+  complete =
+      load(available.vkCmdBindPipeline, "vkCmdBindPipeline"_view) && complete;
+  complete =
+      load(available.vkCmdBindVertexBuffers, "vkCmdBindVertexBuffers"_view) &&
+      complete;
+  complete =
+      load(available.vkCmdCopyBufferToImage, "vkCmdCopyBufferToImage"_view) &&
+      complete;
+  complete = load(available.vkCmdDraw, "vkCmdDraw"_view) && complete;
+  complete =
+      load(available.vkCmdEndRendering, "vkCmdEndRendering"_view) && complete;
+  complete =
+      load(available.vkCmdPipelineBarrier2, "vkCmdPipelineBarrier2"_view) &&
+      complete;
+  complete =
+      load(available.vkCmdPushConstants, "vkCmdPushConstants"_view) && complete;
+  complete =
+      load(available.vkCmdSetScissor, "vkCmdSetScissor"_view) && complete;
+  complete =
+      load(available.vkCmdSetViewport, "vkCmdSetViewport"_view) && complete;
+  complete = load(available.vkCreateBuffer, "vkCreateBuffer"_view) && complete;
+  complete = load(available.vkCreateCommandPool, "vkCreateCommandPool"_view) &&
+             complete;
+  complete =
+      load(available.vkCreateDescriptorPool, "vkCreateDescriptorPool"_view) &&
+      complete;
+  complete = load(
+                 available.vkCreateDescriptorSetLayout,
+                 "vkCreateDescriptorSetLayout"_view) &&
+             complete;
+  complete = load(available.vkCreateDevice, "vkCreateDevice"_view) && complete;
+  complete = load(available.vkCreateFence, "vkCreateFence"_view) && complete;
+  complete = load(
+                 available.vkCreateGraphicsPipelines,
+                 "vkCreateGraphicsPipelines"_view) &&
+             complete;
+  complete = load(available.vkCreateImage, "vkCreateImage"_view) && complete;
+  complete =
+      load(available.vkCreateImageView, "vkCreateImageView"_view) && complete;
+  complete =
+      load(available.vkCreateInstance, "vkCreateInstance"_view) && complete;
+  complete =
+      load(available.vkCreatePipelineLayout, "vkCreatePipelineLayout"_view) &&
+      complete;
+  complete =
+      load(available.vkCreateSampler, "vkCreateSampler"_view) && complete;
+  complete =
+      load(available.vkCreateSemaphore, "vkCreateSemaphore"_view) && complete;
+  complete =
+      load(available.vkCreateShaderModule, "vkCreateShaderModule"_view) &&
+      complete;
+  complete =
+      load(available.vkCreateSwapchainKHR, "vkCreateSwapchainKHR"_view) &&
+      complete;
+  complete =
+      load(available.vkDestroyBuffer, "vkDestroyBuffer"_view) && complete;
+  complete =
+      load(available.vkDestroyCommandPool, "vkDestroyCommandPool"_view) &&
+      complete;
+  complete =
+      load(available.vkDestroyDescriptorPool, "vkDestroyDescriptorPool"_view) &&
+      complete;
+  complete = load(
+                 available.vkDestroyDescriptorSetLayout,
+                 "vkDestroyDescriptorSetLayout"_view) &&
+             complete;
+  complete =
+      load(available.vkDestroyDevice, "vkDestroyDevice"_view) && complete;
+  complete = load(available.vkDestroyFence, "vkDestroyFence"_view) && complete;
+  complete = load(available.vkDestroyImage, "vkDestroyImage"_view) && complete;
+  complete =
+      load(available.vkDestroyImageView, "vkDestroyImageView"_view) && complete;
+  complete =
+      load(available.vkDestroyInstance, "vkDestroyInstance"_view) && complete;
+  complete =
+      load(available.vkDestroyPipeline, "vkDestroyPipeline"_view) && complete;
+  complete =
+      load(available.vkDestroyPipelineLayout, "vkDestroyPipelineLayout"_view) &&
+      complete;
+  complete =
+      load(available.vkDestroySampler, "vkDestroySampler"_view) && complete;
+  complete =
+      load(available.vkDestroySemaphore, "vkDestroySemaphore"_view) && complete;
+  complete =
+      load(available.vkDestroyShaderModule, "vkDestroyShaderModule"_view) &&
+      complete;
+  complete = load(available.vkDestroySurfaceKHR, "vkDestroySurfaceKHR"_view) &&
+             complete;
+  complete =
+      load(available.vkDestroySwapchainKHR, "vkDestroySwapchainKHR"_view) &&
+      complete;
+  complete =
+      load(available.vkDeviceWaitIdle, "vkDeviceWaitIdle"_view) && complete;
+  complete =
+      load(available.vkEndCommandBuffer, "vkEndCommandBuffer"_view) && complete;
+  complete = load(
+                 available.vkEnumerateDeviceExtensionProperties,
+                 "vkEnumerateDeviceExtensionProperties"_view) &&
+             complete;
+  complete = load(
+                 available.vkEnumerateInstanceExtensionProperties,
+                 "vkEnumerateInstanceExtensionProperties"_view) &&
+             complete;
+  complete = load(
+                 available.vkEnumerateInstanceLayerProperties,
+                 "vkEnumerateInstanceLayerProperties"_view) &&
+             complete;
+  complete = load(
+                 available.vkEnumeratePhysicalDevices,
+                 "vkEnumeratePhysicalDevices"_view) &&
+             complete;
+  complete =
+      load(available.vkFreeCommandBuffers, "vkFreeCommandBuffers"_view) &&
+      complete;
+  complete = load(available.vkFreeMemory, "vkFreeMemory"_view) && complete;
+  complete = load(
+                 available.vkGetBufferMemoryRequirements,
+                 "vkGetBufferMemoryRequirements"_view) &&
+             complete;
+  complete =
+      load(available.vkGetDeviceQueue, "vkGetDeviceQueue"_view) && complete;
+  complete = load(
+                 available.vkGetImageMemoryRequirements,
+                 "vkGetImageMemoryRequirements"_view) &&
+             complete;
+  complete =
+      load(available.vkGetInstanceProcAddr, "vkGetInstanceProcAddr"_view) &&
+      complete;
+  complete =
+      load(available.vkGetFenceStatus, "vkGetFenceStatus"_view) && complete;
+  complete = load(
+                 available.vkGetPhysicalDeviceFeatures,
+                 "vkGetPhysicalDeviceFeatures"_view) &&
+             complete;
+  complete = load(
+                 available.vkGetPhysicalDeviceFeatures2,
+                 "vkGetPhysicalDeviceFeatures2"_view) &&
+             complete;
+  complete = load(
+                 available.vkGetPhysicalDeviceMemoryProperties,
+                 "vkGetPhysicalDeviceMemoryProperties"_view) &&
+             complete;
+  complete = load(
+                 available.vkGetPhysicalDeviceProperties,
+                 "vkGetPhysicalDeviceProperties"_view) &&
+             complete;
+  complete = load(
+                 available.vkGetPhysicalDeviceQueueFamilyProperties,
+                 "vkGetPhysicalDeviceQueueFamilyProperties"_view) &&
+             complete;
+  complete = load(
+                 available.vkGetPhysicalDeviceSurfaceCapabilitiesKHR,
+                 "vkGetPhysicalDeviceSurfaceCapabilitiesKHR"_view) &&
+             complete;
+  complete = load(
+                 available.vkGetPhysicalDeviceSurfaceFormatsKHR,
+                 "vkGetPhysicalDeviceSurfaceFormatsKHR"_view) &&
+             complete;
+  complete = load(
+                 available.vkGetPhysicalDeviceSurfacePresentModesKHR,
+                 "vkGetPhysicalDeviceSurfacePresentModesKHR"_view) &&
+             complete;
+  complete = load(
+                 available.vkGetPhysicalDeviceSurfaceSupportKHR,
+                 "vkGetPhysicalDeviceSurfaceSupportKHR"_view) &&
+             complete;
+  complete =
+      load(available.vkGetSwapchainImagesKHR, "vkGetSwapchainImagesKHR"_view) &&
+      complete;
+  complete = load(available.vkMapMemory, "vkMapMemory"_view) && complete;
+  complete =
+      load(available.vkQueuePresentKHR, "vkQueuePresentKHR"_view) && complete;
+  complete = load(available.vkQueueSubmit, "vkQueueSubmit"_view) && complete;
+  complete =
+      load(available.vkQueueWaitIdle, "vkQueueWaitIdle"_view) && complete;
+  complete =
+      load(available.vkResetCommandBuffer, "vkResetCommandBuffer"_view) &&
+      complete;
+  complete = load(available.vkResetFences, "vkResetFences"_view) && complete;
+  complete = load(available.vkUnmapMemory, "vkUnmapMemory"_view) && complete;
+  complete =
+      load(available.vkUpdateDescriptorSets, "vkUpdateDescriptorSets"_view) &&
+      complete;
+  complete =
+      load(available.vkWaitForFences, "vkWaitForFences"_view) && complete;
   if (!complete) {
     release_loader();
     return False;
   }
 
+  functions = available;
   contexts = 1;
   return True;
 
@@ -148,10 +359,7 @@ auto Dispatch::release() -> void {
   // fresh and internally consistent set of addresses.
 
   release_loader();
+  functions = Dispatch();
 
-#define PHOTOPHORE_VULKAN(name) name = nullptr;
-
-#include "implementation/vulkan/functions.hpp"
-#undef PHOTOPHORE_VULKAN
 #endif
 }

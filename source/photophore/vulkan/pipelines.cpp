@@ -9,7 +9,7 @@
 #include "perimortem/core/view/null_terminated.hpp"
 #include "perimortem/memory/thread/bytes.hpp"
 
-#include "implementation/vulkan/dispatch.hpp"
+#include "photophore/vulkan/dispatch.hpp"
 
 using namespace Perimortem::Core;
 using namespace Photophore::Vulkan;
@@ -40,7 +40,8 @@ static auto validate_descriptions(const Context& context, auto descriptions)
     -> void {
   // The supplied Program inventory is the complete description catalogue for
   // this Pipelines instance. Validation requires the supported rendering
-  // profile and a unique locator for every entry before cache state is created.
+  // profile and a unique identity for every entry before cache state is
+  // created.
   if (descriptions.is_empty()) {
     Diagnostics::Log::fatal(
         "Vulkan: No generated Programs were supplied."_view);
@@ -48,7 +49,7 @@ static auto validate_descriptions(const Context& context, auto descriptions)
 
   for (Count index = 0; index < descriptions.get_size(); index++) {
     const auto& description = descriptions.get_data()[index];
-    if (description.locator == nullptr || description.modules.is_empty() ||
+    if (!description.identity.is_set() || description.modules.is_empty() ||
         description.host_input_ranges.get_size() != 1 ||
         description.host_size == 0 ||
         description.parameters_offset > description.host_size ||
@@ -80,9 +81,9 @@ static auto validate_descriptions(const Context& context, auto descriptions)
     }
 
     for (Count previous = 0; previous < index; previous++) {
-      if (descriptions.get_data()[previous].locator == description.locator) {
+      if (descriptions.get_data()[previous].identity == description.identity) {
         Diagnostics::Log::fatal(
-            "Vulkan: Generated Program locators must be unique."_view);
+            "Vulkan: Generated Program identities must be unique."_view);
       }
     }
   }
@@ -103,7 +104,7 @@ static auto create_descriptor_layout(VkDevice device) -> VkDescriptorSetLayout {
 
   info.bindingCount = 1;
   info.pBindings = &binding;
-  if (Dispatch::vkCreateDescriptorSetLayout(
+  if (Dispatch::get().vkCreateDescriptorSetLayout(
           device, &info, nullptr, &descriptor_layout) != VK_SUCCESS) {
     Diagnostics::Log::fatal(
         "Vulkan: Failed to create the generated descriptor layout."_view);
@@ -128,14 +129,14 @@ static auto create_vertex_buffer(
   buffer_info.size = sizeof(vertices);
   buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
   buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  if (Dispatch::vkCreateBuffer(
+  if (Dispatch::get().vkCreateBuffer(
           context.get_device(), &buffer_info, nullptr, &vertex_buffer) !=
       VK_SUCCESS) {
     Diagnostics::Log::fatal("Vulkan: Failed to create vertex buffer."_view);
   }
 
   VkMemoryRequirements requirements = {};
-  Dispatch::vkGetBufferMemoryRequirements(
+  Dispatch::get().vkGetBufferMemoryRequirements(
       context.get_device(), vertex_buffer, &requirements);
 
   constexpr VkMemoryPropertyFlags properties =
@@ -150,17 +151,17 @@ static auto create_vertex_buffer(
   VkMemoryAllocateInfo allocation = {VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO};
   allocation.allocationSize = requirements.size;
   allocation.memoryTypeIndex = memory_type;
-  if (Dispatch::vkAllocateMemory(
+  if (Dispatch::get().vkAllocateMemory(
           context.get_device(), &allocation, nullptr, &vertex_memory) !=
           VK_SUCCESS ||
-      Dispatch::vkBindBufferMemory(
+      Dispatch::get().vkBindBufferMemory(
           context.get_device(), vertex_buffer, vertex_memory, 0) !=
           VK_SUCCESS) {
     Diagnostics::Log::fatal("Vulkan: Failed to allocate vertex memory."_view);
   }
 
   void* mapped = nullptr;
-  if (Dispatch::vkMapMemory(
+  if (Dispatch::get().vkMapMemory(
           context.get_device(), vertex_memory, 0, sizeof(vertices), 0,
           &mapped) != VK_SUCCESS) {
     Diagnostics::Log::fatal("Vulkan: Failed to map vertex memory."_view);
@@ -168,7 +169,7 @@ static auto create_vertex_buffer(
 
   Data::copy(
       Data::cast<U8>(mapped), Data::cast<const U8>(vertices), sizeof(vertices));
-  Dispatch::vkUnmapMemory(context.get_device(), vertex_memory);
+  Dispatch::get().vkUnmapMemory(context.get_device(), vertex_memory);
 }
 
 static auto destroy_vertex_buffer(
@@ -176,21 +177,22 @@ static auto destroy_vertex_buffer(
     VkBuffer& vertex_buffer,
     VkDeviceMemory& vertex_memory) -> void {
   if (vertex_buffer) {
-    Dispatch::vkDestroyBuffer(context.get_device(), vertex_buffer, nullptr);
+    Dispatch::get().vkDestroyBuffer(
+        context.get_device(), vertex_buffer, nullptr);
     vertex_buffer = VK_NULL_HANDLE;
   }
 
   if (vertex_memory) {
-    Dispatch::vkFreeMemory(context.get_device(), vertex_memory, nullptr);
+    Dispatch::get().vkFreeMemory(context.get_device(), vertex_memory, nullptr);
     vertex_memory = VK_NULL_HANDLE;
   }
 }
 
-static auto find_description(auto descriptions, const U8* locator)
+static auto find_description(auto descriptions, Identity::Uuid identity)
     -> decltype(descriptions.get_data()) {
   for (Count index = 0; index < descriptions.get_size(); index++) {
     const auto& description = descriptions.get_data()[index];
-    if (description.locator == locator) {
+    if (description.identity == identity) {
       return &description;
     }
   }
@@ -200,11 +202,11 @@ static auto find_description(auto descriptions, const U8* locator)
 
 static auto find_realization(
     auto& realizations,
-    const U8* locator,
+    Identity::Uuid identity,
     auto pipeline) -> decltype(realizations.get_data()) {
   for (Count index = 0; index < realizations.get_size(); index++) {
     auto& realization = realizations.get_data()[index];
-    if (realization.description->locator == locator &&
+    if (realization.description->identity == identity &&
         realization.pipeline == pipeline) {
       return &realization;
     }
@@ -243,14 +245,14 @@ static auto realize_pipeline(
     VkDescriptorSetLayout descriptor_layout,
     auto& realizations,
     const auto& batch) -> decltype(realizations.get_data()) {
-  const U8* locator = batch.get_program().get_locator();
+  const Identity::Uuid identity = batch.get_program().get_identity();
   auto pipeline = batch.get_pipeline();
-  auto* retained = find_realization(realizations, locator, pipeline);
+  auto* retained = find_realization(realizations, identity, pipeline);
   if (retained != nullptr) {
     return retained;
   }
 
-  const auto* description = find_description(descriptions, locator);
+  const auto* description = find_description(descriptions, identity);
   if (description == nullptr || color_format == VK_FORMAT_UNDEFINED) {
     return nullptr;
   }
@@ -333,7 +335,7 @@ static auto validate(auto descriptions, auto batches) -> Bool {
   for (Count batch_index = 0; batch_index < batches.get_size(); batch_index++) {
     const auto& batch = batches[batch_index];
     const auto* description =
-        find_description(descriptions, batch.get_program().get_locator());
+        find_description(descriptions, batch.get_program().get_identity());
     const auto pipeline = batch.get_pipeline();
     if (description == nullptr || batch.get_vertex_count() == 0 ||
         batch.get_vertex_count() > U32(-1) ||
@@ -448,8 +450,8 @@ static auto sweep_textures(const Context& context, auto& images, auto& textures)
     // submission. A changed generation therefore proves this image's recorded
     // use completed even while the fence represents a newer frame.
     if (image.completion && *image.generation == image.observed_generation) {
-      VkResult status =
-          Dispatch::vkGetFenceStatus(context.get_device(), image.completion);
+      VkResult status = Dispatch::get().vkGetFenceStatus(
+          context.get_device(), image.completion);
       if (status == VK_NOT_READY) {
         index++;
         continue;
@@ -493,13 +495,13 @@ Pipelines::~Pipelines() {
   // Device completion proves that no queued command refers to a cached object.
   // Destruction then releases descriptor sets before image views, shader
   // pipelines before their common layout, and finally the vertex buffer.
-  Dispatch::vkDeviceWaitIdle(context.get_device());
+  Dispatch::get().vkDeviceWaitIdle(context.get_device());
   textures.clear();
   images.clear();
   realizations.clear();
   destroy_vertex_buffer(context, vertex_buffer, vertex_memory);
   if (descriptor_layout) {
-    Dispatch::vkDestroyDescriptorSetLayout(
+    Dispatch::get().vkDestroyDescriptorSetLayout(
         context.get_device(), descriptor_layout, nullptr);
   }
 }
@@ -554,7 +556,7 @@ auto Pipelines::record(const Renderer::Frame& frame, Batches batches) -> Bool {
   for (Count batch_index = 0; batch_index < batches.get_size(); batch_index++) {
     const auto& batch = batches[batch_index];
     auto* realization = find_realization(
-        realizations, batch.get_program().get_locator(), batch.get_pipeline());
+        realizations, batch.get_program().get_identity(), batch.get_pipeline());
     if (realization == nullptr) {
       return False;
     }
@@ -568,7 +570,7 @@ auto Pipelines::record(const Renderer::Frame& frame, Batches batches) -> Bool {
     realization->shader.bind(command_buffer);
 
     constexpr VkDeviceSize vertex_offset = 0;
-    Dispatch::vkCmdBindVertexBuffers(
+    Dispatch::get().vkCmdBindVertexBuffers(
         command_buffer, 0, 1, &vertex_buffer, &vertex_offset);
     for (Count descriptor_index = 0;
          descriptor_index < realization->description->descriptors.get_size();

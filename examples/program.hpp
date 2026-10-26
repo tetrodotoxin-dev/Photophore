@@ -9,11 +9,11 @@
 namespace Photophore::Examples {
 
 // SpriteProgram publishes the complete process lifetime shader description
-// used by the demo. The frame locator and Vulkan description identify the same
+// used by the demo. The frame identity and Vulkan description identify the same
 // product while keeping authored shader inputs separate from command recording.
 class SpriteProgram {
  public:
-  static auto get_locator() -> Frame::Program;
+  static auto get_program() -> Frame::Program;
   static auto get_description() -> Description::Program;
 };
 

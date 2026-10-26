@@ -8,7 +8,7 @@
 #include "perimortem/core/diagnostics/log.hpp"
 #include "perimortem/core/view/null_terminated.hpp"
 
-#include "implementation/vulkan/dispatch.hpp"
+#include "photophore/vulkan/dispatch.hpp"
 
 using namespace Photophore::Vulkan;
 using namespace Perimortem::Core;
@@ -37,7 +37,8 @@ static auto allocate_memory(
 
   VkDeviceMemory memory = VK_NULL_HANDLE;
   require_success(
-      Dispatch::vkAllocateMemory(context.get_device(), &info, nullptr, &memory),
+      Dispatch::get().vkAllocateMemory(
+          context.get_device(), &info, nullptr, &memory),
       "Vulkan: Failed to allocate texture memory."_view);
   return memory;
 }
@@ -72,7 +73,7 @@ static auto transition_image_layout(
   VkDependencyInfo dependency = {VK_STRUCTURE_TYPE_DEPENDENCY_INFO};
   dependency.imageMemoryBarrierCount = 1;
   dependency.pImageMemoryBarriers = &barrier;
-  Dispatch::vkCmdPipelineBarrier2(command_buffer, &dependency);
+  Dispatch::get().vkCmdPipelineBarrier2(command_buffer, &dependency);
 }
 
 auto TextureImage::create(const Context& context, const Texture2D& resource)
@@ -104,12 +105,12 @@ auto TextureImage::create(const Context& context, const Texture2D& resource)
 
   VkBuffer staging = VK_NULL_HANDLE;
   require_success(
-      Dispatch::vkCreateBuffer(
+      Dispatch::get().vkCreateBuffer(
           context.get_device(), &buffer_info, nullptr, &staging),
       "Vulkan: Failed to create texture staging buffer."_view);
 
   VkMemoryRequirements staging_requirements = {};
-  Dispatch::vkGetBufferMemoryRequirements(
+  Dispatch::get().vkGetBufferMemoryRequirements(
       context.get_device(), staging, &staging_requirements);
 
   constexpr VkMemoryPropertyFlags host_flags =
@@ -118,13 +119,13 @@ auto TextureImage::create(const Context& context, const Texture2D& resource)
   VkDeviceMemory staging_memory =
       allocate_memory(context, staging_requirements, host_flags);
   require_success(
-      Dispatch::vkBindBufferMemory(
+      Dispatch::get().vkBindBufferMemory(
           context.get_device(), staging, staging_memory, 0),
       "Vulkan: Failed to bind texture staging memory."_view);
 
   void* mapped = nullptr;
   require_success(
-      Dispatch::vkMapMemory(
+      Dispatch::get().vkMapMemory(
           context.get_device(), staging_memory, 0, image_size, 0, &mapped),
       "Vulkan: Failed to map texture staging memory."_view);
 
@@ -135,7 +136,7 @@ auto TextureImage::create(const Context& context, const Texture2D& resource)
     destination_bytes.get_data()[index] = source_bytes[index];
   }
 
-  Dispatch::vkUnmapMemory(context.get_device(), staging_memory);
+  Dispatch::get().vkUnmapMemory(context.get_device(), staging_memory);
 
   VkImageCreateInfo image_info = {VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO};
   image_info.imageType = VK_IMAGE_TYPE_2D;
@@ -149,17 +150,17 @@ auto TextureImage::create(const Context& context, const Texture2D& resource)
       VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
   image_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
   require_success(
-      Dispatch::vkCreateImage(
+      Dispatch::get().vkCreateImage(
           context.get_device(), &image_info, nullptr, &texture.image),
       "Vulkan: Failed to create texture image."_view);
 
   VkMemoryRequirements image_requirements = {};
-  Dispatch::vkGetImageMemoryRequirements(
+  Dispatch::get().vkGetImageMemoryRequirements(
       context.get_device(), texture.image, &image_requirements);
   texture.memory = allocate_memory(
       context, image_requirements, VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT);
   require_success(
-      Dispatch::vkBindImageMemory(
+      Dispatch::get().vkBindImageMemory(
           context.get_device(), texture.image, texture.memory, 0),
       "Vulkan: Failed to bind texture image memory."_view);
 
@@ -174,7 +175,7 @@ auto TextureImage::create(const Context& context, const Texture2D& resource)
   region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   region.imageSubresource.layerCount = 1;
   region.imageExtent = {width, height, 1};
-  Dispatch::vkCmdCopyBufferToImage(
+  Dispatch::get().vkCmdCopyBufferToImage(
       command_buffer, staging, texture.image,
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &region);
   transition_image_layout(
@@ -187,8 +188,8 @@ auto TextureImage::create(const Context& context, const Texture2D& resource)
   // published through a sampled view.
   context.submit_immediate_commands(command_buffer);
 
-  Dispatch::vkDestroyBuffer(context.get_device(), staging, nullptr);
-  Dispatch::vkFreeMemory(context.get_device(), staging_memory, nullptr);
+  Dispatch::get().vkDestroyBuffer(context.get_device(), staging, nullptr);
+  Dispatch::get().vkFreeMemory(context.get_device(), staging_memory, nullptr);
 
   VkImageViewCreateInfo view_info = {VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO};
   view_info.image = texture.image;
@@ -198,7 +199,7 @@ auto TextureImage::create(const Context& context, const Texture2D& resource)
   view_info.subresourceRange.levelCount = 1;
   view_info.subresourceRange.layerCount = 1;
   require_success(
-      Dispatch::vkCreateImageView(
+      Dispatch::get().vkCreateImageView(
           context.get_device(), &view_info, nullptr, &texture.image_view),
       "Vulkan: Failed to create texture image view."_view);
   return texture;
@@ -216,9 +217,9 @@ static auto release(
   // The view refers to the image, and the image binds the device memory.
   // Destruction therefore releases the view first, then the image, then its
   // allocation.
-  Dispatch::vkDestroyImageView(device, image_view, nullptr);
-  Dispatch::vkDestroyImage(device, image, nullptr);
-  Dispatch::vkFreeMemory(device, memory, nullptr);
+  Dispatch::get().vkDestroyImageView(device, image_view, nullptr);
+  Dispatch::get().vkDestroyImage(device, image, nullptr);
+  Dispatch::get().vkFreeMemory(device, memory, nullptr);
 }
 
 TextureImage::~TextureImage() {

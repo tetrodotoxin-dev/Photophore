@@ -6,6 +6,7 @@
 #include "toolchain/validation/test.hpp"
 
 #include "perimortem/core/data.hpp"
+#include "perimortem/core/view/null_terminated.hpp"
 
 using namespace Perimortem::Core;
 using namespace Photophore::Platform;
@@ -35,7 +36,7 @@ VALIDATION_TEST(PlatformPresentation, provider_operations) {
         [](void* context) {
           auto& provider = *Data::cast<PresentationProvider>(context);
           ++provider.extension_requests;
-          return "VK_TEST_provider_surface";
+          return "VK_TEST_provider_surface"_view;
         },
 
     .create_surface =
@@ -66,7 +67,7 @@ VALIDATION_TEST(PlatformPresentation, provider_operations) {
 VALIDATION_TEST(PlatformPresentation, unavailable) {
   Presentation presentation;
   EXPECT_NOT(presentation.is_valid());
-  EXPECT_EQ(presentation.get_instance_extension(), nullptr);
+  EXPECT(presentation.get_instance_extension().is_empty());
 
   VkSurfaceKHR surface = VK_NULL_HANDLE;
   EXPECT_EQ(

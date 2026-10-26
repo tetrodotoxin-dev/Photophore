@@ -19,7 +19,7 @@ namespace Photophore::Frame {
 // Batch is one complete draw submitted to Pipelines. Construction moves the
 // parameter bytes and resource list into the batch, while each Texture2D keeps
 // its shared pixel Matrix accessible. Transform and size are copied values, and
-// Program stores the stable locator published by Description::Program.
+// Program stores the explicit identity published by Description::Program.
 //
 // `operator>` orders `z_index` first and `authored_order` second. Pipelines
 // records the resulting sequence and reads each Batch only during that call.

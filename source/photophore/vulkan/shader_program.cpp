@@ -9,7 +9,7 @@
 #include "perimortem/core/view/null_terminated.hpp"
 #include "perimortem/memory/thread/bytes.hpp"
 
-#include "implementation/vulkan/dispatch.hpp"
+#include "photophore/vulkan/dispatch.hpp"
 
 using namespace Perimortem::Core;
 using namespace Perimortem::Memory;
@@ -66,7 +66,7 @@ static auto make_shader_module(VkDevice device, const Module& source)
 
   VkShaderModule module = VK_NULL_HANDLE;
   require_success(
-      Dispatch::vkCreateShaderModule(device, &info, nullptr, &module),
+      Dispatch::get().vkCreateShaderModule(device, &info, nullptr, &module),
       "Vulkan: Failed to create render module."_view);
   return module;
 }
@@ -290,7 +290,7 @@ auto ShaderProgram::create(
   layout_info.pPushConstantRanges = program.push_constant_ranges.get_data();
 
   require_success(
-      Dispatch::vkCreatePipelineLayout(
+      Dispatch::get().vkCreatePipelineLayout(
           device, &layout_info, nullptr, &program.layout),
       "Vulkan: Failed to create render pipeline layout."_view);
 
@@ -319,7 +319,7 @@ auto ShaderProgram::create(
   pipeline_info.layout = program.layout;
 
   require_success(
-      Dispatch::vkCreateGraphicsPipelines(
+      Dispatch::get().vkCreateGraphicsPipelines(
           device, VK_NULL_HANDLE, 1, &pipeline_info, nullptr,
           &program.pipeline),
       "Vulkan: Failed to create render pipeline."_view);
@@ -327,7 +327,7 @@ auto ShaderProgram::create(
   // the call. The temporary modules can then be destroyed while ShaderProgram
   // retains only its pipeline and layout handles.
   for (Count i = 0; i < source_modules.get_size(); i++) {
-    Dispatch::vkDestroyShaderModule(device, shader_modules[i], nullptr);
+    Dispatch::get().vkDestroyShaderModule(device, shader_modules[i], nullptr);
   }
 
   return program;
@@ -338,8 +338,8 @@ ShaderProgram::~ShaderProgram() {
     return;
   }
 
-  Dispatch::vkDestroyPipeline(device, pipeline, nullptr);
-  Dispatch::vkDestroyPipelineLayout(device, layout, nullptr);
+  Dispatch::get().vkDestroyPipeline(device, pipeline, nullptr);
+  Dispatch::get().vkDestroyPipelineLayout(device, layout, nullptr);
 }
 
 ShaderProgram::ShaderProgram(ShaderProgram&& other) noexcept {
@@ -362,7 +362,7 @@ auto ShaderProgram::operator=(ShaderProgram&& other) noexcept
 }
 
 auto ShaderProgram::bind(VkCommandBuffer command_buffer) const -> void {
-  Dispatch::vkCmdBindPipeline(
+  Dispatch::get().vkCmdBindPipeline(
       command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipeline);
 }
 
@@ -374,7 +374,7 @@ auto ShaderProgram::bind_descriptor_set(
     Diagnostics::Log::fatal("Vulkan: Invalid render descriptor."_view);
   }
 
-  Dispatch::vkCmdBindDescriptorSets(
+  Dispatch::get().vkCmdBindDescriptorSets(
       command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, layout, U32(set), 1,
       &descriptor_set, 0, nullptr);
 }
@@ -393,7 +393,7 @@ auto ShaderProgram::push_constants(
     Diagnostics::Log::fatal("Vulkan: Invalid render host input size."_view);
   }
 
-  Dispatch::vkCmdPushConstants(
+  Dispatch::get().vkCmdPushConstants(
       command_buffer, layout, range.stageFlags, range.offset,
       U32(source.get_size()), source.get_data());
 }
@@ -404,7 +404,7 @@ auto ShaderProgram::draw(VkCommandBuffer command_buffer, Count vertex_count)
     Diagnostics::Log::fatal("Vulkan: Invalid render vertex count."_view);
   }
 
-  Dispatch::vkCmdDraw(command_buffer, U32(vertex_count), 1, 0, 0);
+  Dispatch::get().vkCmdDraw(command_buffer, U32(vertex_count), 1, 0, 0);
 }
 
 auto ShaderProgram::get_layout() const -> VkPipelineLayout {
