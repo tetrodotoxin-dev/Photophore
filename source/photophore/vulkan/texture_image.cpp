@@ -76,22 +76,22 @@ static auto transition_image_layout(
   Dispatch::get().vkCmdPipelineBarrier2(command_buffer, &dependency);
 }
 
-auto TextureImage::create(const Context& context, const Texture2D& resource)
+auto TextureImage::create(const Context& context, const Pixels2D& content)
     -> TextureImage {
   TextureImage texture;
-  if (!resource.is_drawable()) {
+  if (content.is_empty()) {
     return texture;
   }
 
   texture.device = context.get_device();
 
-  const auto& source_image = resource.get_image();
+  const auto& source_image = content.get_pixels();
   View::Vector<Srgba8> pixels = source_image.get_view().get_values();
   const U32 width = source_image.get_column_count();
   const U32 height = source_image.get_row_count();
   const VkDeviceSize image_size =
       VkDeviceSize(width) * height * Srgba8::get_byte_count();
-  if (width == 0 || height == 0 || resource.is_empty() ||
+  if (width == 0 || height == 0 ||
       pixels.get_size() * sizeof(Srgba8) < image_size) {
     return texture;
   }

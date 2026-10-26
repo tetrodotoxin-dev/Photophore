@@ -21,11 +21,11 @@ static auto require_success(VkResult result, View::Bytes message) -> void {
 
 auto Texture::create(
     const Context& context,
-    const Texture2D& resource,
+    Sampler2D sampler,
     VkImageView image_view,
     VkDescriptorSetLayout descriptor_set_layout) -> Texture {
   Texture texture;
-  if (image_view == VK_NULL_HANDLE || resource.is_empty()) {
+  if (image_view == VK_NULL_HANDLE) {
     return texture;
   }
 
@@ -35,7 +35,7 @@ auto Texture::create(
   // state. One conversion point keeps cache equality aligned with native state.
   VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
   VkFilter filter = VK_FILTER_LINEAR;
-  switch (resource.get_sampler().get_filtering()) {
+  switch (sampler.get_filtering()) {
   case Sampler2D::Filtering::Linear:
     filter = VK_FILTER_LINEAR;
     break;
@@ -48,7 +48,7 @@ auto Texture::create(
   sampler_info.minFilter = filter;
 
   VkSamplerAddressMode address_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
-  switch (resource.get_sampler().get_addressing()) {
+  switch (sampler.get_addressing()) {
   case Sampler2D::Addressing::Zero:
     address_mode = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER;
     break;

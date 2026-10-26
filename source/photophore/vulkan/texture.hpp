@@ -7,15 +7,15 @@
 
 #include "toolchain/toolchain.hpp"
 
-#include "photophore/image/texture_2d.hpp"
+#include "photophore/image/sampler_2d.hpp"
 #include "photophore/vulkan/context.hpp"
 
 namespace Photophore::Vulkan {
 
-// Texture is the Vulkan sampling realization of one Texture2D. It contains a
-// VkSampler and a descriptor pool with exactly one set whose binding zero names
-// the supplied TextureImage view. Separate Texture values pair one uploaded
-// Matrix with different Sampler2D policies.
+// Texture realizes one Sampler2D policy for a supplied TextureImage view. It
+// contains a VkSampler and a descriptor pool with exactly one set whose binding
+// zero names that image view. Separate Texture values can therefore sample one
+// uploaded Pixels2D using different policies.
 //
 // Context's device and the supplied TextureImage view remain live through every
 // recorded use. Pipelines releases matching Texture values after their frame
@@ -24,7 +24,7 @@ class Texture {
  public:
   static EXPORTED(PHOTOPHORE) auto create(
       const Context& context,
-      const Image::Texture2D& resource,
+      Image::Sampler2D sampler,
       VkImageView image_view,
       VkDescriptorSetLayout descriptor_set_layout) -> Texture;
 

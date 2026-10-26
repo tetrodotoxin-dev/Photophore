@@ -239,11 +239,11 @@ static auto run(Window& window, S32 count, char** values) -> S32 {
     return 3;
   }
 
-  Texture2D image(
-      Data::take(orientation),
+  Texture2D image = Texture2D::create(
+      Pixels2D::create(Data::take(orientation)),
       Sampler2D::create(
           Sampler2D::Addressing::Clamp, Sampler2D::Filtering::Nearest));
-  Texture2D overlay(make_overlay());
+  Texture2D overlay = Texture2D::create(Pixels2D::create(make_overlay()));
   const Program program = SpriteProgram::get_program();
   const Count frame_limit = read_frame_limit(count, values);
   Count frames = 0;

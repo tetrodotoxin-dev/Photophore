@@ -29,6 +29,13 @@ static auto make_size(U32 width, U32 height) -> Math::Size<U32, 2> {
   return Math::Size<U32, 2>(dimensions);
 }
 
+static auto one_pixel_image() -> Matrix<Srgba8> {
+  Thread::Vector<Srgba8> pixels;
+  pixels.insert(Srgba8::from_rgb(17, 34, 51));
+  return Matrix<Srgba8>::create(
+      Math::Domain<2>(make_size(1, 1)), pixels.get_view());
+}
+
 VALIDATION_TEST(GraphicsImage, srgba8_contract) {
   const Srgba8 empty;
   EXPECT_EQ(empty.red, U8(0));
@@ -46,47 +53,55 @@ VALIDATION_TEST(GraphicsImage, srgba8_contract) {
 VALIDATION_TEST(GraphicsImage, empty_values) {
   const Count requests = Allocator::Bibliotheca::check_out_requests();
   Sprite sprite;
-  Texture2D texture;
   EXPECT_EQ(Allocator::Bibliotheca::check_out_requests(), requests);
   EXPECT_NOT(sprite.is_drawable());
-  EXPECT(texture.is_empty());
-  EXPECT_EQ(texture.get_reservations(), Count(0));
+  EXPECT_NOT(sprite.try_texture());
 }
 
-// Texture2D copies retain one pixel Matrix while preserving independent
-// sampling values. This case destroys the original Texture2D values before the
-// frame reads the shared pixels.
+VALIDATION_TEST(GraphicsImage, content_identity) {
+  Pixels2D first = Pixels2D::create(one_pixel_image());
+  Pixels2D retained = first;
+  Pixels2D duplicate = Pixels2D::create(one_pixel_image());
+  EXPECT(first == retained);
+  EXPECT_NOT(first == duplicate);
+}
+
+// Pixels2D copies retain one Matrix while Texture2D values preserve independent
+// sampling policies. This case destroys the original values before the frame
+// reads the shared pixels.
 VALIDATION_TEST(GraphicsImage, frame_lifetime) {
   Thread::Vector<Texture2D> textures;
   const Matrix<Srgba8>* identity;
   {
-    Thread::Vector<Srgba8> pixels;
-    pixels.insert(Srgba8::from_rgb(17, 34, 51));
-    Matrix<Srgba8> created = Matrix<Srgba8>::create(
-        Math::Domain<2>(make_size(1, 1)), pixels.get_view());
-    Texture2D wrapped(
-        Data::take(created),
+    Pixels2D content = Pixels2D::create(one_pixel_image());
+    Texture2D wrapped = Texture2D::create(
+        content,
         Sampler2D::create(
             Sampler2D::Addressing::Wrap, Sampler2D::Filtering::Linear));
-    identity = &wrapped.get_image();
-    Texture2D clamped(
-        wrapped,
+    Texture2D repeated = Texture2D::create(
+        content,
+        Sampler2D::create(
+            Sampler2D::Addressing::Wrap, Sampler2D::Filtering::Linear));
+    identity = &wrapped.get_content().get_pixels();
+    Texture2D clamped = Texture2D::create(
+        content,
         Sampler2D::create(
             Sampler2D::Addressing::Clamp, Sampler2D::Filtering::Nearest));
-    EXPECT_NOT(wrapped.matches(clamped));
+    EXPECT(wrapped == repeated);
+    EXPECT_NOT(wrapped == clamped);
     textures.insert(wrapped);
     textures.insert(clamped);
-    EXPECT_EQ(wrapped.get_reservations(), Count(4));
   }
 
   Batch frame(
       Program(), Data::take(textures), Thread::Bytes(), Transform(),
       make_size(1, 1), Pipeline(), 6, 0, 0);
   const auto* resources = frame.get_resources().get_data();
-  EXPECT_EQ(&resources[0].get_image(), identity);
-  EXPECT_EQ(&resources[1].get_image(), identity);
-  EXPECT_EQ(resources[0].get_reservations(), Count(2));
-  EXPECT_EQ(resources[1].get_image().get_view().get_values()[0].red, U8(17));
+  EXPECT_EQ(&resources[0].get_content().get_pixels(), identity);
+  EXPECT_EQ(&resources[1].get_content().get_pixels(), identity);
+  EXPECT_EQ(
+      resources[1].get_content().get_pixels().get_view().get_values()[0].red,
+      U8(17));
   EXPECT(
       resources[0].get_sampler().get_addressing() ==
       Sampler2D::Addressing::Wrap);

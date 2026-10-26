@@ -7,14 +7,17 @@ using namespace Perimortem::Core;
 using namespace Photophore::Scene;
 
 // Sprite accessors keep the editable application model independent of frame
-// construction. Texture assignment retains shared Matrix identity while the
+// construction. Texture assignment retains Pixels2D identity while the
 // remaining properties are copied placement and ordering values.
-auto Sprite::get_texture() const -> const Image::Texture2D& {
-  return texture;
+auto Sprite::try_texture() const -> Storage::Option<const Image::Texture2D&> {
+  return texture.visit(
+      [](const Image::Texture2D& selected)
+          -> Storage::Option<const Image::Texture2D&> { return selected; },
+      []() -> Storage::Option<const Image::Texture2D&> { return {}; });
 }
 
-auto Sprite::set_texture(const Image::Texture2D& texture) -> void {
-  this->texture = texture;
+auto Sprite::set_texture(const Image::Texture2D& selected) -> void {
+  texture = Storage::Option<Image::Texture2D>(selected);
 }
 
 auto Sprite::get_size() const -> Math::Size<U32, 2> {
@@ -50,8 +53,12 @@ auto Sprite::set_z_index(S64 z_index) -> void {
 }
 
 auto Sprite::is_drawable() const -> Bool {
-  // Frame collection requires a visible nonempty area and a Texture2D with at
-  // least one pixel. The predicate combines those independent authored values
-  // before a caller creates a Batch.
-  return visible && !size.is_empty() && texture.is_drawable();
+  // Frame collection requires visible nonempty geometry and selected drawable
+  // pixel content. The explicit Option keeps absence separate from Texture2D.
+  return texture.visit(
+      [this](const Image::Texture2D& selected) -> Bool {
+        return Bool(visible && !size.is_empty() && selected.is_drawable());
+      },
+
+      [] { return False; });
 }

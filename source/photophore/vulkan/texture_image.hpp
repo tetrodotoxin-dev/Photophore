@@ -7,13 +7,13 @@
 
 #include "toolchain/toolchain.hpp"
 
-#include "photophore/image/texture_2d.hpp"
+#include "photophore/image/pixels_2d.hpp"
 #include "photophore/vulkan/context.hpp"
 
 namespace Photophore::Vulkan {
 
 // TextureImage owns one sRGB VkImage, its device memory and its sampled view
-// for a shared Srgba8 Matrix. `create` stages tightly packed pixels, records
+// for one Pixels2D value. `create` stages tightly packed pixels, records
 // the layout transitions and waits for the graphics queue. A successful return
 // therefore contains an independent device copy and permits immediate staging
 // release.
@@ -25,7 +25,7 @@ class TextureImage {
  public:
   static EXPORTED(PHOTOPHORE) auto create(
       const Context& context,
-      const Image::Texture2D& resource) -> TextureImage;
+      const Image::Pixels2D& content) -> TextureImage;
 
   TextureImage() = default;
   EXPORTED(PHOTOPHORE) ~TextureImage();

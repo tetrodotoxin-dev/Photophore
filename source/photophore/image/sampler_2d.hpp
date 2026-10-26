@@ -14,8 +14,8 @@ namespace Photophore::Image {
 //
 // `create` preserves any declared Addressing and Filtering pair. Its default
 // arguments select a transparent border with linear interpolation. Equality
-// compares the two U8 fields, so one pixel Matrix can carry distinct sampling
-// values without an allocation.
+// compares the two U8 fields, so one Pixels2D value can participate in distinct
+// Texture2D sampling contracts without another pixel allocation.
 class Sampler2D {
  public:
   enum class Addressing : U8 {

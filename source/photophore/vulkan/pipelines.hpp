@@ -21,8 +21,9 @@ namespace Photophore::Vulkan {
 
 // Pipelines records ordered Frame::Batch values as Vulkan draw commands. It
 // creates each validated Description::Program and fixed Frame::Pipeline pair
-// once, uploads each shared pixel Matrix once, and creates one descriptor set
-// for each Matrix and Sampler2D pair. Later frames reuse those native objects.
+// once, uploads each Pixels2D value once, and creates one descriptor set for
+// each Texture2D content and sampler pair. Later frames reuse those native
+// objects.
 //
 // Construction stores references to a live Context and the complete Program
 // inventory, including every nested View and name. Both remain accessible until
@@ -37,9 +38,9 @@ namespace Photophore::Vulkan {
 // need remain accessible only until that call returns.
 //
 // Each ImageEntry remembers the Renderer frame fence and generation of its
-// latest draw. Cache retirement combines completed GPU use with the shared
-// matrix reservation count, allowing inactive textures to leave the cache
-// while current submissions continue on the queue.
+// latest draw and whether the current recording pass selected it. Unselected
+// content leaves the cache after that GPU use completes. Application references
+// remain independent and can recreate a realization through a later Batch.
 class Pipelines {
   using Descriptions = Perimortem::Core::View::Vector<Description::Program>;
   using Batches = Perimortem::Core::View::Vector<Frame::Batch>;
@@ -62,13 +63,14 @@ class Pipelines {
 
  private:
   struct ImageEntry {
-    // Stores one pixel Matrix upload and the latest frame use that controls its
-    // destruction.
-    Image::Texture2D resource;
+    // Stores one Pixels2D upload and the latest frame use that controls its
+    // destruction. `used` records selection by the current recording pass.
+    Image::Pixels2D content;
     TextureImage image;
     VkFence completion = VK_NULL_HANDLE;
     const Count* generation = nullptr;
     Count observed_generation = 0;
+    Bool used = False;
   };
 
   struct TextureEntry {
@@ -83,6 +85,11 @@ class Pipelines {
     Frame::Pipeline pipeline;
     ShaderProgram shader;
   };
+
+  auto realize_image(const Image::Texture2D& resource) -> ImageEntry*;
+  auto realize_texture(
+      const Image::Texture2D& resource,
+      const TextureImage& image) -> Texture*;
 
   const Context& context;
   Descriptions descriptions;

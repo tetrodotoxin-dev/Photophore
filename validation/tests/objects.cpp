@@ -42,7 +42,7 @@ VALIDATION_TEST(GraphicsObjects, sprite_values) {
   EXPECT(sprite.is_visible());
   EXPECT_EQ(sprite.get_z_index(), S64(0));
 
-  Texture2D texture(one_pixel_image());
+  Texture2D texture = Texture2D::create(Pixels2D::create(one_pixel_image()));
   sprite.set_texture(texture);
   sprite.set_size(make_size(64, 32));
 
@@ -62,6 +62,16 @@ VALIDATION_TEST(GraphicsObjects, sprite_values) {
   EXPECT(sprite.is_drawable());
   EXPECT(sprite.get_transform().translation[0] == 12);
   EXPECT_EQ(sprite.get_size()[0], U32(64));
-  EXPECT_EQ(
-      &alias.get_texture().get_image(), &sprite.get_texture().get_image());
+  EXPECT(alias.try_texture().visit(
+      [&sprite](const Texture2D& alias_texture) {
+        return sprite.try_texture().visit(
+            [&alias_texture](const Texture2D& sprite_texture) {
+              return alias_texture.get_content() ==
+                     sprite_texture.get_content();
+            },
+
+            [] { return False; });
+      },
+
+      [] { return False; }));
 }

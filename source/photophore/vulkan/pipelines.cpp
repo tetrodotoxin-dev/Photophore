@@ -215,11 +215,11 @@ static auto find_realization(
   return nullptr;
 }
 
-static auto find_image(auto& images, const auto& resource)
+static auto find_image(auto& images, const auto& content)
     -> decltype(images.get_data()) {
   for (Count index = 0; index < images.get_size(); index++) {
     auto& entry = images.get_data()[index];
-    if (&entry.resource.get_image() == &resource.get_image()) {
+    if (entry.content == content) {
       return &entry;
     }
   }
@@ -230,7 +230,7 @@ static auto find_image(auto& images, const auto& resource)
 static auto find_texture(auto& textures, const auto& resource) -> Texture* {
   for (Count index = 0; index < textures.get_size(); index++) {
     auto& entry = textures.get_data()[index];
-    if (entry.resource.matches(resource)) {
+    if (entry.resource == resource) {
       return &entry.texture;
     }
   }
@@ -285,46 +285,43 @@ static auto realize_pipeline(
   return &realization;
 }
 
-static auto realize_image(
-    const Context& context,
-    auto& images,
-    const auto& resource) -> decltype(images.get_data()) {
-  auto* retained = find_image(images, resource);
+auto Pipelines::realize_image(const Image::Texture2D& resource) -> ImageEntry* {
+  const auto& content = resource.get_content();
+  auto* retained = find_image(images, content);
   if (retained) {
+    retained->used = True;
     return retained;
   }
 
-  Count index = images.get_size();
-  // Matrix address is the upload key. Sampler policy belongs to TextureEntry,
-  // so several Texture2D values can reference the same uploaded image bytes.
-  images.resize(index + 1);
+  // Pixels2D identity is the upload key. Sampler policy belongs to
+  // TextureEntry, so several Texture2D values can share one native image.
+  ImageEntry created = {
+    .content = content,
+    .image = TextureImage::create(context, content),
+    .used = True,
+  };
 
-  auto& entry = images.get_data()[index];
-  entry.resource = resource;
-  entry.image = TextureImage::create(context, resource);
+  auto& entry = images.insert(Data::take(created));
   return &entry;
 }
 
-static auto realize_texture(
-    const Context& context,
-    auto& textures,
-    VkDescriptorSetLayout descriptor_layout,
-    const auto& resource,
+auto Pipelines::realize_texture(
+    const Image::Texture2D& resource,
     const TextureImage& image) -> Texture* {
   Texture* retained = find_texture(textures, resource);
   if (retained) {
     return retained;
   }
 
-  Count index = textures.get_size();
-  // Texture2D equality combines Matrix identity with sampler state, which is
+  // Texture2D equality combines Pixels2D identity with sampler state, which is
   // the exact native state represented by a Texture cache entry.
-  textures.resize(index + 1);
+  TextureEntry created = {
+    .resource = resource,
+    .texture = Texture::create(
+        context, resource.get_sampler(), image.get_view(), descriptor_layout),
+  };
 
-  auto& entry = textures.get_data()[index];
-  entry.resource = resource;
-  entry.texture =
-      Texture::create(context, resource, image.get_view(), descriptor_layout);
+  auto& entry = textures.insert(Data::take(created));
   return &entry.texture;
 }
 
@@ -355,7 +352,7 @@ static auto validate(auto descriptions, auto batches) -> Bool {
     const auto resources = batch.get_resources();
     for (Count resource_index = 0; resource_index < resources.get_size();
          resource_index++) {
-      if (!resources[resource_index].is_drawable()) {
+      if (!resources.get_data()[resource_index].is_drawable()) {
         return False;
       }
     }
@@ -427,21 +424,13 @@ static auto make_host_inputs(
 
 static auto sweep_textures(const Context& context, auto& images, auto& textures)
     -> void {
-  // Matrix reservations identify images retained only by the image cache and
-  // matching descriptor entries. The submission fence then establishes that
-  // earlier draws have finished reading the native image and its descriptors.
+  // Content not selected by the current recording pass can leave the cache
+  // after its last GPU use completes. Application references do not control
+  // backend retention. Selecting the Texture2D again recreates its realization.
   Count index = 0;
   while (index < images.get_size()) {
     auto& image = images.get_data()[index];
-    const auto* identity = &image.resource.get_image();
-    Count cached_reservations = 1;
-    for (Count texture_index = 0; texture_index < textures.get_size();
-         texture_index++) {
-      const auto& texture = textures.get_data()[texture_index];
-      cached_reservations += &texture.resource.get_image() == identity;
-    }
-
-    if (image.resource.get_reservations() != cached_reservations) {
+    if (image.used) {
       index++;
       continue;
     }
@@ -468,7 +457,7 @@ static auto sweep_textures(const Context& context, auto& images, auto& textures)
     Count texture_index = 0;
     while (texture_index < textures.get_size()) {
       const auto& texture = textures.get_data()[texture_index];
-      if (&texture.resource.get_image() != identity) {
+      if (!(texture.resource.get_content() == image.content)) {
         texture_index++;
         continue;
       }
@@ -523,6 +512,10 @@ auto Pipelines::record(const Renderer::Frame& frame, Batches batches) -> Bool {
     return False;
   }
 
+  for (Count index = 0; index < images.get_size(); index++) {
+    images.get_data()[index].used = False;
+  }
+
   // The first pass creates every missing pipeline, image and descriptor set.
   // The second pass can then record the complete batch sequence without native
   // allocation between draw commands. Host input bytes use this frame's
@@ -539,14 +532,13 @@ auto Pipelines::record(const Renderer::Frame& frame, Batches batches) -> Bool {
     const auto resources = batch.get_resources();
     for (Count resource_index = 0; resource_index < resources.get_size();
          resource_index++) {
-      const auto& resource = resources[resource_index];
-      auto* image = realize_image(context, images, resource);
+      const auto& resource = resources.get_data()[resource_index];
+      auto* image = realize_image(resource);
       if (image == nullptr) {
         return False;
       }
 
-      auto* texture = realize_texture(
-          context, textures, descriptor_layout, resource, image->image);
+      auto* texture = realize_texture(resource, image->image);
       if (texture == nullptr) {
         return False;
       }
@@ -575,9 +567,9 @@ auto Pipelines::record(const Renderer::Frame& frame, Batches batches) -> Bool {
     for (Count descriptor_index = 0;
          descriptor_index < realization->description->descriptors.get_size();
          descriptor_index++) {
-      const auto& resource = batch.get_resources()[descriptor_index];
+      const auto& resource = batch.get_resources().get_data()[descriptor_index];
       Texture* texture = find_texture(textures, resource);
-      auto* image = find_image(images, resource);
+      auto* image = find_image(images, resource.get_content());
       if (image == nullptr) {
         return False;
       }

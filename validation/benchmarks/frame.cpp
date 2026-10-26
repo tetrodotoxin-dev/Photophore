@@ -37,7 +37,8 @@ static Harness Frames = {
   .setup =
       [] {
         Matrix<Srgba8> image = one_pixel_image();
-        const Texture2D texture(Data::take(image));
+        const Texture2D texture =
+            Texture2D::create(Pixels2D::create(Data::take(image)));
         for (Count i = 0; i < 1024; ++i) {
           Thread::Vector<Texture2D> resources;
           resources.insert(texture);
