@@ -6,86 +6,44 @@
 #include "perimortem/core/data.hpp"
 #include "perimortem/core/diagnostics/log.hpp"
 #include "perimortem/core/math/scalar.hpp"
+#include "perimortem/core/storage/vector.hpp"
 #include "perimortem/core/view/null_terminated.hpp"
 #include "perimortem/memory/thread/bytes.hpp"
 
+#include "photophore/vulkan/details/program.hpp"
 #include "photophore/vulkan/dispatch.hpp"
 
 using namespace Perimortem::Core;
 using namespace Photophore::Vulkan;
 using namespace Perimortem::Memory;
 
-struct UnitQuadVertex {
-  R32 position[2];
-  R32 texture_uv[2];
-};
-
-// Pipelines stores one interleaved unit quad shared by every draw. Description
-// validation requires the two shader inputs, component widths, offsets and
-// stride matching this record before a Program is created.
-static auto supports_unit_quad(const auto& description) -> Bool {
-  auto inputs = description.vertex_inputs;
-  return Bool(
-      inputs.get_size() == 2 && inputs.get_data()[0].location == 0 &&
-      inputs.get_data()[0].components == 2 &&
-      inputs.get_data()[0].offset == 0 &&
-      inputs.get_data()[0].stride == sizeof(UnitQuadVertex) &&
-      inputs.get_data()[1].location == 1 &&
-      inputs.get_data()[1].components == 2 &&
-      inputs.get_data()[1].offset == sizeof(R32) * 2 &&
-      inputs.get_data()[1].stride == sizeof(UnitQuadVertex));
-}
-
-static auto validate_descriptions(const Context& context, auto descriptions)
-    -> void {
-  // The supplied Program inventory is the complete description catalogue for
-  // this Pipelines instance. Validation requires the supported rendering
-  // profile and a unique identity for every entry before cache state is
-  // created.
-  if (descriptions.is_empty()) {
+static auto require_supported_descriptions(
+    const Context& context,
+    auto descriptions) -> void {
+  switch (Details::Program::inspect(descriptions, context.supports_float64())) {
+  case Details::Program::Status::Accepted:
+    return;
+  case Details::Program::Status::EmptyInventory:
     Diagnostics::Log::fatal(
         "Vulkan: No generated Programs were supplied."_view);
-  }
-
-  for (Count index = 0; index < descriptions.get_size(); index++) {
-    const auto& description = descriptions.get_data()[index];
-    if (!description.identity.is_set() || description.modules.is_empty() ||
-        description.host_input_ranges.get_size() != 1 ||
-        description.host_size == 0 ||
-        description.parameters_offset > description.host_size ||
-        description.parameters_size >
-            description.host_size - description.parameters_offset ||
-        description.descriptors.is_empty() ||
-        (description.requires_float64 && !context.supports_float64())) {
-      Diagnostics::Log::fatal(
-          "Vulkan: A generated Program is not supported by this device."_view);
-    }
-
-    for (Count descriptor_index = 0;
-         descriptor_index < description.descriptors.get_size();
-         descriptor_index++) {
-      const auto descriptor = description.descriptors[descriptor_index];
-      if (descriptor.slot != 0 ||
-          descriptor.resource !=
-              decltype(descriptor.resource)::SampledTexture2D) {
-        Diagnostics::Log::fatal(
-            "Vulkan: A generated descriptor is not supported by this device."_view);
-      }
-
-      for (Count prior = 0; prior < descriptor_index; prior++) {
-        if (description.descriptors[prior].set == descriptor.set) {
-          Diagnostics::Log::fatal(
-              "Vulkan: Generated texture descriptors use distinct sets."_view);
-        }
-      }
-    }
-
-    for (Count previous = 0; previous < index; previous++) {
-      if (descriptions.get_data()[previous].identity == description.identity) {
-        Diagnostics::Log::fatal(
-            "Vulkan: Generated Program identities must be unique."_view);
-      }
-    }
+    return;
+  case Details::Program::Status::InvalidDescription:
+  case Details::Program::Status::UnsupportedFloat64:
+    Diagnostics::Log::fatal(
+        "Vulkan: A generated Program is not supported by this device."_view);
+    return;
+  case Details::Program::Status::InvalidDescriptor:
+    Diagnostics::Log::fatal(
+        "Vulkan: A generated descriptor is not supported by this device."_view);
+    return;
+  case Details::Program::Status::RepeatedDescriptorSet:
+    Diagnostics::Log::fatal(
+        "Vulkan: Generated texture descriptors use distinct sets."_view);
+    return;
+  case Details::Program::Status::RepeatedIdentity:
+    Diagnostics::Log::fatal(
+        "Vulkan: Generated Program identities must be unique."_view);
+    return;
   }
 }
 
@@ -119,14 +77,20 @@ static auto create_vertex_buffer(
     VkDeviceMemory& vertex_memory) -> void {
   // Two triangles cover normalized unit coordinates. Frame transforms place
   // the shared immutable geometry and scale it to the batch pixel extent.
-  static constexpr UnitQuadVertex vertices[] = {
-    {{0.0f, 0.0f}, {0.0f, 0.0f}}, {{1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{1.0f, 1.0f}, {1.0f, 1.0f}}, {{0.0f, 0.0f}, {0.0f, 0.0f}},
-    {{1.0f, 1.0f}, {1.0f, 1.0f}}, {{0.0f, 1.0f}, {0.0f, 1.0f}},
-  };
+  static constexpr Storage::Vector<Details::Program::UnitQuadVertex, 6>
+      vertices = {
+        {Details::Program::UnitQuadVertex{{{0.0f, 0.0f}}, {{0.0f, 0.0f}}},
+         {{{1.0f, 0.0f}}, {{1.0f, 0.0f}}},
+         {{{1.0f, 1.0f}}, {{1.0f, 1.0f}}},
+         {{{0.0f, 0.0f}}, {{0.0f, 0.0f}}},
+         {{{1.0f, 1.0f}}, {{1.0f, 1.0f}}},
+         {{{0.0f, 1.0f}}, {{0.0f, 1.0f}}}}};
+
+  constexpr Count vertex_bytes =
+      vertices.get_size() * sizeof(Details::Program::UnitQuadVertex);
 
   VkBufferCreateInfo buffer_info = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
-  buffer_info.size = sizeof(vertices);
+  buffer_info.size = vertex_bytes;
   buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
   buffer_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   if (Dispatch::get().vkCreateBuffer(
@@ -162,13 +126,14 @@ static auto create_vertex_buffer(
 
   void* mapped = nullptr;
   if (Dispatch::get().vkMapMemory(
-          context.get_device(), vertex_memory, 0, sizeof(vertices), 0,
-          &mapped) != VK_SUCCESS) {
+          context.get_device(), vertex_memory, 0, vertex_bytes, 0, &mapped) !=
+      VK_SUCCESS) {
     Diagnostics::Log::fatal("Vulkan: Failed to map vertex memory."_view);
   }
 
   Data::copy(
-      Data::cast<U8>(mapped), Data::cast<const U8>(vertices), sizeof(vertices));
+      Data::cast<U8>(mapped), Data::cast<const U8>(vertices.get_data()),
+      vertex_bytes);
   Dispatch::get().vkUnmapMemory(context.get_device(), vertex_memory);
 }
 
@@ -186,18 +151,6 @@ static auto destroy_vertex_buffer(
     Dispatch::get().vkFreeMemory(context.get_device(), vertex_memory, nullptr);
     vertex_memory = VK_NULL_HANDLE;
   }
-}
-
-static auto find_description(auto descriptions, Identity::Uuid identity)
-    -> decltype(descriptions.get_data()) {
-  for (Count index = 0; index < descriptions.get_size(); index++) {
-    const auto& description = descriptions.get_data()[index];
-    if (description.identity == identity) {
-      return &description;
-    }
-  }
-
-  return nullptr;
 }
 
 static auto find_realization(
@@ -252,7 +205,7 @@ static auto realize_pipeline(
     return retained;
   }
 
-  const auto* description = find_description(descriptions, identity);
+  const auto* description = Details::Program::find(descriptions, identity);
   if (description == nullptr || color_format == VK_FORMAT_UNDEFINED) {
     return nullptr;
   }
@@ -325,42 +278,6 @@ auto Pipelines::realize_texture(
   return &entry.texture;
 }
 
-static auto validate(auto descriptions, auto batches) -> Bool {
-  // Validation completes before command recording. Each batch must name a
-  // Program in this inventory and match its parameter bytes, resource count and
-  // the fixed unit quad pipeline profile.
-  for (Count batch_index = 0; batch_index < batches.get_size(); batch_index++) {
-    const auto& batch = batches[batch_index];
-    const auto* description =
-        find_description(descriptions, batch.get_program().get_identity());
-    const auto pipeline = batch.get_pipeline();
-    if (description == nullptr || batch.get_vertex_count() == 0 ||
-        batch.get_vertex_count() > U32(-1) ||
-        pipeline.get_geometry() !=
-            decltype(pipeline.get_geometry())::UnitQuad2D ||
-        pipeline.get_topology() !=
-            decltype(pipeline.get_topology())::TriangleList ||
-        pipeline.get_blend() != decltype(pipeline.get_blend())::Alpha ||
-        !supports_unit_quad(*description) ||
-        batch.get_resources().get_size() !=
-            description->descriptors.get_size() ||
-        batch.get_inputs().get_size() != description->parameters_size ||
-        batch.get_size_pixels().is_empty()) {
-      return False;
-    }
-
-    const auto resources = batch.get_resources();
-    for (Count resource_index = 0; resource_index < resources.get_size();
-         resource_index++) {
-      if (!resources.get_data()[resource_index].is_drawable()) {
-        return False;
-      }
-    }
-  }
-
-  return True;
-}
-
 static auto make_host_inputs(
     const auto& description,
     const auto& batch,
@@ -403,7 +320,7 @@ static auto make_host_inputs(
       return {};
     }
 
-    R32 values[4] = {};
+    Storage::Vector<R32, 4> values;
     if (field.role == decltype(field.role)::TransformX) {
       values[0] = R32(transform.get_xx() * size[0]);
       values[1] = R32(transform.get_xy() * size[1]);
@@ -416,7 +333,8 @@ static auto make_host_inputs(
       values[3] = R32(height);
     }
 
-    Data::copy(access.get_data() + field.offset, values, 4);
+    Data::copy(
+        access.get_data() + field.offset, values.get_data(), values.get_size());
   }
 
   return inputs;
@@ -474,7 +392,7 @@ Pipelines::Pipelines(
     VkFormat color_format,
     Descriptions descriptions)
     : context(context), descriptions(descriptions) {
-  validate_descriptions(context, descriptions);
+  require_supported_descriptions(context, descriptions);
   descriptor_layout = create_descriptor_layout(context.get_device());
   create_vertex_buffer(context, vertex_buffer, vertex_memory);
   rebuild(color_format);
@@ -508,7 +426,8 @@ auto Pipelines::record(const Renderer::Frame& frame, Batches batches) -> Bool {
   U32 width = frame.width;
   U32 height = frame.height;
   if (!command_buffer || width == 0 || height == 0 || !frame.completion ||
-      !frame.completion_generation || !validate(descriptions, batches)) {
+      !frame.completion_generation ||
+      !Details::Program::accepts(descriptions, batches)) {
     return False;
   }
 
