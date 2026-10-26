@@ -31,8 +31,11 @@ auto Texture::create(
 
   texture.device = context.get_device();
 
-  // Sampler2D is the application facing value for Vulkan filter and address
-  // state. One conversion point keeps cache equality aligned with native state.
+  // Sampler2D is the complete sampling policy for the current single mip image
+  // profile. Magnification and minification share one filter, every coordinate
+  // axis shares one address mode, and anisotropy remains disabled. Zero maps to
+  // Vulkan's default transparent black border. One conversion point keeps cache
+  // equality aligned with the native sampler state.
   VkSamplerCreateInfo sampler_info = {VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO};
   VkFilter filter = VK_FILTER_LINEAR;
   switch (sampler.get_filtering()) {

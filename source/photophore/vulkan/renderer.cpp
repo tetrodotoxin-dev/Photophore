@@ -125,6 +125,23 @@ static auto destroy_presentations(const Context& context, auto& presentations)
   }
 }
 
+// Presentation slots correspond by index to one swapchain's images. Replacing
+// the chain destroys those slots first, recreates the images, and allocates one
+// new presentation semaphore and fence pair per replacement image. The result
+// reports whether Pipelines must rebuild its format dependent realizations.
+static auto recreate_swapchain(
+    const Context& context,
+    Swapchain& swapchain,
+    auto& presentations,
+    U32 width,
+    U32 height) -> Bool {
+  const VkFormat old_format = swapchain.get_format();
+  destroy_presentations(context, presentations);
+  swapchain.recreate(context, width, height);
+  allocate_presentations(context, swapchain.get_image_count(), presentations);
+  return swapchain.get_format() != old_format;
+}
+
 static auto begin_rendering(
     const Swapchain& swapchain,
     const Renderer::Frame& frame) -> void {
@@ -361,16 +378,7 @@ auto Renderer::resize(U32 width, U32 height) -> Bool {
   }
 
   wait_idle();
-  // Presentation slots correspond by index to the old swapchain images. They
-  // are destroyed before recreation and rebuilt for the replacement image
-  // count. The return reports whether pipelines using the attachment format
-  // need rebuilding.
-
-  const VkFormat old_format = swapchain.get_format();
-  destroy_presentations(context, presentations);
-  swapchain.recreate(context, width, height);
-  allocate_presentations(context, swapchain.get_image_count(), presentations);
-  return swapchain.get_format() != old_format;
+  return recreate_swapchain(context, swapchain, presentations, width, height);
 }
 
 auto Renderer::get_width() const -> U32 {

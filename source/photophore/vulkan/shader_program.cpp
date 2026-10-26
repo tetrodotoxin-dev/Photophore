@@ -221,9 +221,11 @@ auto ShaderProgram::create(
 
   input_assembly.topology = to_vk_topology(pipeline.get_topology());
 
-  // Program validation has selected the fixed rendering profile before this
-  // function runs. These structures realize filled triangles, one sample and
-  // one color attachment using source alpha composition.
+  // Program validation has selected Photophore's 2D profile before native
+  // creation. Filled, single sample triangles need no depth attachment. Culling
+  // remains disabled so authored winding does not remove a unit quad after a
+  // transform. The single color attachment uses straight source alpha for RGB
+  // while preserving the source alpha channel itself.
   VkPipelineViewportStateCreateInfo viewport_state = {
     VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO};
 

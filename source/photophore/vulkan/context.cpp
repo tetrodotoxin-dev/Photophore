@@ -19,6 +19,9 @@ using namespace Photophore::Vulkan;
 
 #ifdef PERI_DEBUG
 
+// Debug builds request the standard validation layer when the host installed
+// it. Validation remains optional so development diagnostics never become a
+// runtime requirement of the Photophore SDK.
 static constexpr auto validation_layer = "VK_LAYER_KHRONOS_validation\0"_bytes;
 static const Storage::Vector<const char*, 1> validation_layers = {{
   Data::cast<const char>(validation_layer.get_data()),
@@ -149,10 +152,11 @@ static auto select_physical_device(
     return VK_NULL_HANDLE;
   }
 
-  // Device selection requires Vulkan 1.3, the requested extensions, floating
-  // point features and a graphics queue that can present to this surface. A
-  // discrete device returns immediately. The first other matching device is
-  // retained as the fallback.
+  // Device selection requires Vulkan 1.3, the rendering and presentation
+  // features used by Context, and one queue family that can both draw and
+  // present to this surface. A discrete device returns immediately because it
+  // is the explicit performance preference. The first other matching device
+  // remains the deterministic fallback.
   VkPhysicalDevice fallback = VK_NULL_HANDLE;
   for (U32 i = 0; i < read_physical_device_count; i++) {
     VkPhysicalDeviceProperties properties = {};
@@ -187,6 +191,9 @@ static auto select_physical_device(
       continue;
     }
 
+    // The KHR and EXT maintenance families expose the same presentation fence
+    // capability under paired instance and device extension names. Selection
+    // records the device spelling that matches the available instance family.
     VkPhysicalDeviceSwapchainMaintenance1FeaturesKHR presentation = {
       VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SWAPCHAIN_MAINTENANCE_1_FEATURES_KHR};
 
@@ -248,8 +255,10 @@ static auto select_physical_device(
       return physical_devices.get_data()[i];
     }
 
-    fallback = physical_devices.get_data()[i];
-    maintenance_extension = maintenance;
+    if (!fallback) {
+      fallback = physical_devices.get_data()[i];
+      maintenance_extension = maintenance;
+    }
   }
 
   return fallback;
@@ -288,40 +297,43 @@ static auto find_graphics_queue_family(
   return U32(-1);
 }
 
-auto Context::create(Presentation presentation) -> Context {
-  Context ctx;
-  const View::Bytes extension = presentation.get_instance_extension();
-  // The provider declares its instance extension before loader acquisition. A
-  // valid Presentation and one Vulkan reservation establish the native entry
-  // conditions for every handle published through ctx.
-  if (!presentation.is_valid() || extension.is_empty() ||
-      !Dispatch::acquire()) {
-    return ctx;
-  }
-
-  ctx.owns_loader = True;
-  // Submission fences prove command completion. Presentation fences extend
-  // that proof through the presentation engine's semaphore and swapchain use,
-  // giving resize and shutdown a precise retirement point. KHR and EXT expose
-  // the same structures through matching instance and device extensions.
-
+// Instance creation enables every available surface maintenance family before
+// physical device selection. This preserves devices that expose only the KHR
+// or EXT half of the presentation fence contract. `platform_extension` remains
+// accessible through vkCreateInstance. `create_instance` returns that complete
+// handle after Vulkan consumes the temporary extension inventory.
+static auto create_instance(
+    View::Bytes platform_extension,
+    Bool& khr_surface,
+    Bool& ext_surface) -> VkInstance {
+  // Swapchain maintenance supplies a fence for each presentation. Submission
+  // fences alone prove command completion but cannot prove when the
+  // presentation engine has released a semaphore or retired swapchain. KHR
+  // and EXT expose the same capability through paired extension families.
   auto available = read_extensions();
-  Bool khr_surface = supports_extension(
+  khr_surface = supports_extension(
       available.get_view(),
       vulkan_name(VK_KHR_SURFACE_MAINTENANCE_1_EXTENSION_NAME));
-  Bool ext_surface = supports_extension(
+  ext_surface = supports_extension(
       available.get_view(),
       vulkan_name(VK_EXT_SURFACE_MAINTENANCE_1_EXTENSION_NAME));
   if ((!khr_surface && !ext_surface) ||
       !supports_extension(
           available.get_view(),
           vulkan_name(VK_KHR_GET_SURFACE_CAPABILITIES_2_EXTENSION_NAME))) {
-    return Context();
+    return VK_NULL_HANDLE;
   }
 
-  Thread::Bytes terminated_extension(extension);
+  Thread::Bytes terminated_extension(platform_extension);
   terminated_extension.append(0);
 
+  // Vulkan create records take a counted array of null terminated extension
+  // names. The base surface extension establishes presentation, and the
+  // provider contributes the platform surface extension used to create its
+  // native VkSurfaceKHR. Surface capabilities2 is required by both maintenance
+  // families. Every available maintenance family is enabled because physical
+  // device selection happens after instance creation and a device may expose
+  // only its matching swapchain maintenance extension.
   Storage::Vector<const char*, 5> instance_extensions;
   Count extension_count = 0;
   instance_extensions[extension_count++] = VK_KHR_SURFACE_EXTENSION_NAME;
@@ -360,47 +372,43 @@ auto Context::create(Presentation presentation) -> Context {
 
 #endif
 
-  // Each successful creation writes its handle directly into ctx. Returning an
-  // empty Context moves that partial state into its destructor, so every later
-  // failure releases the handles already created in reverse order.
-  if (Dispatch::get().vkCreateInstance(
-          &instance_info, nullptr, &ctx.instance) != VK_SUCCESS) {
-    ctx.instance = VK_NULL_HANDLE;
-    return Context();
-  }
-
-  if (presentation.create_surface(
-          ctx.instance, Dispatch::get().vkGetInstanceProcAddr, &ctx.surface) !=
+  VkInstance instance = VK_NULL_HANDLE;
+  if (Dispatch::get().vkCreateInstance(&instance_info, nullptr, &instance) !=
       VK_SUCCESS) {
-    ctx.surface = VK_NULL_HANDLE;
-    return Context();
+    return VK_NULL_HANDLE;
   }
 
-  View::Bytes maintenance_extension;
-  // Device selection proves the feature and queue profile before logical
-  // device creation. The selected extension spelling then follows that exact
-  // physical device into VkDeviceCreateInfo.
-  ctx.physical_device = select_physical_device(
-      ctx.instance, ctx.surface, khr_surface, ext_surface,
-      maintenance_extension);
-  if (!ctx.physical_device) {
-    return Context();
-  }
+  return instance;
+}
 
-  ctx.graphics_queue_family =
-      find_graphics_queue_family(ctx.physical_device, ctx.surface);
-  if (ctx.graphics_queue_family == U32(-1)) {
-    return Context();
-  }
-
+// Logical device creation enables the complete rendering profile selected from
+// the physical device. The feature and extension arrays remain accessible
+// through vkCreateDevice. `float64` reports the one optional shader feature.
+// Every other requested capability is required before this call.
+static auto create_device(
+    VkPhysicalDevice physical_device,
+    U32 queue_family,
+    View::Bytes maintenance_extension,
+    Bool& float64) -> VkDevice {
+  // Context publishes one queue because every rendering and presentation
+  // operation is serialized through the selected family. The priority requests
+  // the highest scheduling priority within that family. Reserving additional
+  // queues would add device state that the renderer never submits to.
   constexpr R32 queue_priority = 1.0f;
   VkDeviceQueueCreateInfo queue_info = {
     VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO};
 
-  queue_info.queueFamilyIndex = ctx.graphics_queue_family;
+  queue_info.queueFamilyIndex = queue_family;
   queue_info.queueCount = 1;
   queue_info.pQueuePriorities = &queue_priority;
 
+  // The feature chain is the minimum native profile implemented by the
+  // renderer. Dynamic rendering removes render pass and framebuffer objects,
+  // with the attachment format becoming part of each ShaderProgram.
+  // Synchronization2 gives image transitions explicit stage and access scopes.
+  // Swapchain maintenance adds presentation fences so semaphores and retired
+  // chains have a direct completion proof instead of relying on a future image
+  // acquisition.
   VkPhysicalDeviceDynamicRenderingFeatures dynamic_rendering = {
     VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_FEATURES};
 
@@ -418,6 +426,10 @@ auto Context::create(Presentation presentation) -> Context {
   presentation_features.swapchainMaintenance1 = VK_TRUE;
   dynamic_rendering.pNext = &presentation_features;
 
+  // The device extension inventory has exactly two null terminated names.
+  // VK_KHR_swapchain supplies images and queue presentation. The selected KHR
+  // or EXT maintenance name supplies the presentation fences required by
+  // Renderer. The temporary copy remains accessible through vkCreateDevice.
   Thread::Bytes terminated_maintenance_extension(maintenance_extension);
   terminated_maintenance_extension.append(0);
 
@@ -431,11 +443,11 @@ auto Context::create(Presentation presentation) -> Context {
   // validation then rejects a description requiring float64 on another device.
   VkPhysicalDeviceFeatures available_features = {};
   Dispatch::get().vkGetPhysicalDeviceFeatures(
-      ctx.physical_device, &available_features);
+      physical_device, &available_features);
 
   VkPhysicalDeviceFeatures enabled_features = {};
   enabled_features.shaderFloat64 = available_features.shaderFloat64;
-  ctx.float64 = Bool(available_features.shaderFloat64);
+  float64 = Bool(available_features.shaderFloat64);
 
   VkDeviceCreateInfo device_info = {VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO};
   device_info.pNext = &sync2;
@@ -445,28 +457,87 @@ auto Context::create(Presentation presentation) -> Context {
   device_info.ppEnabledExtensionNames = device_extensions.get_data();
   device_info.pEnabledFeatures = &enabled_features;
 
+  VkDevice device = VK_NULL_HANDLE;
   if (Dispatch::get().vkCreateDevice(
-          ctx.physical_device, &device_info, nullptr, &ctx.device) !=
+          physical_device, &device_info, nullptr, &device) != VK_SUCCESS) {
+    return VK_NULL_HANDLE;
+  }
+
+  return device;
+}
+
+// The shared pool supplies primary buffers to immediate uploads and rotating
+// Renderer slots. Individual reset support lets each completed slot reuse its
+// command buffer without resetting other recorded work in the same pool.
+static auto create_command_pool(VkDevice device, U32 queue_family)
+    -> VkCommandPool {
+  VkCommandPoolCreateInfo pool_info = {
+    VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
+
+  pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+  pool_info.queueFamilyIndex = queue_family;
+
+  VkCommandPool command_pool = VK_NULL_HANDLE;
+  if (Dispatch::get().vkCreateCommandPool(
+          device, &pool_info, nullptr, &command_pool) != VK_SUCCESS) {
+    return VK_NULL_HANDLE;
+  }
+
+  return command_pool;
+}
+
+// Each phase publishes one handle only after its native creation succeeds.
+// Returning an empty Context then destroys every completed earlier phase in
+// reverse order, including the process loader reservation.
+auto Context::create(Presentation presentation) -> Context {
+  Context ctx;
+  const View::Bytes extension = presentation.get_instance_extension();
+  if (!presentation.is_valid() || extension.is_empty() ||
+      !Dispatch::acquire()) {
+    return ctx;
+  }
+
+  ctx.owns_loader = True;
+
+  Bool khr_surface = False;
+  Bool ext_surface = False;
+  ctx.instance = create_instance(extension, khr_surface, ext_surface);
+  if (!ctx.instance) {
+    return Context();
+  }
+
+  if (presentation.create_surface(
+          ctx.instance, Dispatch::get().vkGetInstanceProcAddr, &ctx.surface) !=
       VK_SUCCESS) {
-    ctx.device = VK_NULL_HANDLE;
+    ctx.surface = VK_NULL_HANDLE;
+    return Context();
+  }
+
+  View::Bytes maintenance_extension;
+  ctx.physical_device = select_physical_device(
+      ctx.instance, ctx.surface, khr_surface, ext_surface,
+      maintenance_extension);
+  if (!ctx.physical_device) {
+    return Context();
+  }
+
+  ctx.graphics_queue_family =
+      find_graphics_queue_family(ctx.physical_device, ctx.surface);
+  if (ctx.graphics_queue_family == U32(-1)) {
+    return Context();
+  }
+
+  ctx.device = create_device(
+      ctx.physical_device, ctx.graphics_queue_family, maintenance_extension,
+      ctx.float64);
+  if (!ctx.device) {
     return Context();
   }
 
   Dispatch::get().vkGetDeviceQueue(
       ctx.device, ctx.graphics_queue_family, 0, &ctx.graphics_queue);
-
-  // Immediate uploads and Renderer frame slots allocate primary command buffers
-  // from this pool. Reset support lets each completed frame reuse its command
-  // buffer independently while the pool remains tied to the selected queue
-  // family.
-  VkCommandPoolCreateInfo pool_info = {
-    VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO};
-
-  pool_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-  pool_info.queueFamilyIndex = ctx.graphics_queue_family;
-  if (Dispatch::get().vkCreateCommandPool(
-          ctx.device, &pool_info, nullptr, &ctx.command_pool) != VK_SUCCESS) {
-    ctx.command_pool = VK_NULL_HANDLE;
+  ctx.command_pool = create_command_pool(ctx.device, ctx.graphics_queue_family);
+  if (!ctx.command_pool) {
     return Context();
   }
 

@@ -96,8 +96,12 @@ auto TextureImage::create(const Context& context, const Pixels2D& content)
     return texture;
   }
 
-  // The device selects its optimal image tiling. A tightly packed host coherent
-  // buffer bridges the row major Srgba8 Matrix into that native image layout.
+  // The final sampled image uses device local memory and optimal tiling. A
+  // tightly packed, host visible staging buffer bridges the row major Srgba8
+  // Matrix into that layout. Host coherent memory avoids a separate mapped
+  // range flush, while synchronous immediate submission keeps the staging
+  // lifetime inside this creation call at the cost of one queue wait per new
+  // Pixels2D upload.
   VkBufferCreateInfo buffer_info = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
   buffer_info.size = image_size;
   buffer_info.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;

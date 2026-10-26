@@ -22,7 +22,9 @@ namespace Photophore::Vulkan {
 // and their handles are destroyed before this Context.
 //
 // `create` requires Vulkan 1.3, dynamic rendering, synchronization2 and either
-// KHR or EXT swapchain maintenance presentation fences. Success has a nonnull
+// the complete KHR or EXT surface and swapchain maintenance family. The
+// maintenance requirement gives Renderer a fence for presentation engine use,
+// which is separate from command submission completion. Success has a nonnull
 // `get_device`. Missing requirements return an empty Context after releasing
 // every native handle created during discovery.
 class Context {

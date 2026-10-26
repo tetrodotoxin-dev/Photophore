@@ -89,6 +89,11 @@ static auto create_vertex_buffer(
   constexpr Count vertex_bytes =
       vertices.get_size() * sizeof(Details::Program::UnitQuadVertex);
 
+  // The six vertices are immutable, small and shared by every draw. Mapping
+  // host visible coherent memory once avoids a staging command and queue wait
+  // for this fixed buffer. Exclusive sharing matches Context's single graphics
+  // queue, while device local memory remains reserved for larger sampled
+  // images whose repeated reads justify an upload.
   VkBufferCreateInfo buffer_info = {VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO};
   buffer_info.size = vertex_bytes;
   buffer_info.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;

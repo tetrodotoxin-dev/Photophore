@@ -108,8 +108,9 @@ static auto choose_present_mode(
     }
   }
 
-  // Mailbox provides the preferred low latency path. FIFO is the universal
-  // Vulkan presentation mode and gives every conforming surface a selection.
+  // Mailbox replaces a queued image with newer work, preferring low latency at
+  // the cost of the additional buffering required by that mode. FIFO preserves
+  // vertical synchronization and is the universal Vulkan fallback.
   return VK_PRESENT_MODE_FIFO_KHR;
 }
 
@@ -156,6 +157,12 @@ static auto build(
     return False;
   }
 
+  if (!(surface_capabilities.supportedCompositeAlpha &
+        VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR)) {
+    Diagnostics::Log::fatal(
+        "Vulkan: Surface does not support opaque presentation."_view);
+  }
+
   // One image beyond the surface minimum gives rendering room while
   // presentation retains another. The surface maximum bounds that buffering
   // preference and remains authoritative for the actual image count.
@@ -170,6 +177,12 @@ static auto build(
   VkSwapchainCreateInfoKHR swapchain_info = {
     VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR};
 
+  // Photophore renders directly into one color attachment per image. The Window
+  // contract exposes no composited transparency, so presentation selects
+  // opaque alpha. Context's combined graphics and presentation queue permits
+  // exclusive sharing without ownership transfers. The surface's current
+  // transform is preserved, obscured pixels may be discarded, and oldSwapchain
+  // communicates the replacement relationship during recreation.
   swapchain_info.surface = surface;
   swapchain_info.minImageCount = image_count;
   swapchain_info.imageFormat = swapchain_state.format;
@@ -307,7 +320,6 @@ auto Swapchain::acquire_next_image(VkSemaphore signal_semaphore) const -> U32 {
 
   // SUBOPTIMAL still acquires an image and signals the semaphore. Submitting
   // that image consumes the signal before this frame slot can be used again.
-
   if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR) {
     Diagnostics::Log::fatal("Vulkan: Failed to acquire swapchain image."_view);
   }

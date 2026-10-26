@@ -66,6 +66,10 @@ class Renderer {
   EXPORTED(PHOTOPHORE) auto get_swapchain() const -> const Swapchain&;
 
  private:
+  // Two command slots let the CPU prepare one frame while the preceding
+  // submission completes. Additional slots would increase queued latency and
+  // per-frame synchronization storage without changing presentation image
+  // ownership, which is tracked separately below.
   static constexpr Count frames_in_flight = 2;
 
   struct FrameState {

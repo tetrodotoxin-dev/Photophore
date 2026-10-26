@@ -64,58 +64,11 @@ auto Dispatch::symbol(View::Bytes name) -> void* {
 #endif
 }
 
-auto Dispatch::acquire() -> Bool {
-
-#ifdef TOOLCHAIN_WASM
-
-  return False;
-
-#else
-
-  // The first Context publishes the complete function table while holding the
-  // loader mutex. Later Context values retain that immutable table by count and
-  // call its entries directly.
-
-  Synchronization::Mutex::Lock lock(loader_mutex);
-  if (contexts) {
-    ++contexts;
-    return True;
-  }
-
-  Allocator::Arena errors;
-
-#ifdef TOOLCHAIN_WINDOWS
-
-  constexpr auto filename = "vulkan-1.dll"_view;
-
-#else
-
-  constexpr auto filename = "libvulkan.so.1"_view;
-
-#endif
-
-  loader = Process::Library::open(filename, errors)
-               .visit(
-                   [](Process::Library& library) {
-                     auto allocation =
-                         Allocator::Global::allocate(sizeof(Process::Library));
-                     if (allocation.get_capacity() < sizeof(Process::Library)) {
-                       Process::Library* unavailable = nullptr;
-                       return unavailable;
-                     }
-
-                     return &Lifetime::construct<Process::Library>(
-                         allocation.get_data(),
-                         [&library] { return Data::take(library); });
-                   },
-
-                   [](View::Bytes) -> Process::Library* { return nullptr; });
-
-  if (!loader) {
-    return False;
-  }
-
-  Dispatch available;
+// Resolves every required loader symbol into one unpublished table. Every
+// lookup runs even after an earlier miss so diagnostics and debuggers observe
+// the complete inventory attempt. The caller publishes the table only when
+// every address is available.
+auto Dispatch::load(Dispatch& available) -> Bool {
   auto load = []<typename Function>(
                   Function& function, View::Bytes name) -> Bool {
     function = Data::bit_cast<Function>(Dispatch::symbol(name));
@@ -333,7 +286,61 @@ auto Dispatch::acquire() -> Bool {
       complete;
   complete =
       load(available.vkWaitForFences, "vkWaitForFences"_view) && complete;
-  if (!complete) {
+  return complete;
+}
+
+auto Dispatch::acquire() -> Bool {
+
+#ifdef TOOLCHAIN_WASM
+
+  return False;
+
+#else
+
+  // The first Context publishes the complete function table while holding the
+  // loader mutex. Later Context values retain that immutable table by count and
+  // call its entries directly.
+  Synchronization::Mutex::Lock lock(loader_mutex);
+  if (contexts) {
+    ++contexts;
+    return True;
+  }
+
+  Allocator::Arena errors;
+
+#ifdef TOOLCHAIN_WINDOWS
+
+  constexpr auto filename = "vulkan-1.dll"_view;
+
+#else
+
+  constexpr auto filename = "libvulkan.so.1"_view;
+
+#endif
+
+  loader = Process::Library::open(filename, errors)
+               .visit(
+                   [](Process::Library& library) {
+                     auto allocation =
+                         Allocator::Global::allocate(sizeof(Process::Library));
+                     if (allocation.get_capacity() < sizeof(Process::Library)) {
+                       Process::Library* unavailable = nullptr;
+                       return unavailable;
+                     }
+
+                     return &Lifetime::construct<Process::Library>(
+                         allocation.get_data(),
+                         [&library] { return Data::take(library); });
+                   },
+
+                   [](View::Bytes) -> Process::Library* { return nullptr; });
+
+  if (!loader) {
+    return False;
+  }
+
+  Dispatch available;
+  if (!load(available)) {
     release_loader();
     return False;
   }
@@ -357,7 +364,6 @@ auto Dispatch::release() -> void {
   // The final Context arrives here after its native resources have unwound.
   // Clearing the table with the module lets a future acquisition publish one
   // fresh and internally consistent set of addresses.
-
   release_loader();
   functions = Dispatch();
 

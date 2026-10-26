@@ -117,6 +117,7 @@ class Dispatch {
   PFN_vkWaitForFences vkWaitForFences = nullptr;
 
  private:
+  static auto load(Dispatch& available) -> Bool;
   static auto symbol(Perimortem::Core::View::Bytes name) -> void*;
   static Dispatch functions;
 };

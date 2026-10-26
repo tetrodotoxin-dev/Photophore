@@ -323,7 +323,6 @@ auto Win32::Details::Provider::initialize(
 
     // Forwarding unconsumed WM_SYSKEY messages preserves User32 Alt shortcuts
     // and window controls after physical controls have entered the snapshot.
-
     return DefWindowProcW(handle, message, wparam, lparam);
   };
 
@@ -392,7 +391,6 @@ auto Win32::Details::Provider::poll_events() -> EventStatus {
   // Only this window's messages contribute to its observation. WM_QUIT is
   // thread state, so preserve it for the application pump after marking this
   // window closed.
-
   MSG message;
   while (PeekMessageW(&message, surface, 0, 0, PM_REMOVE)) {
     if (message.message == WM_QUIT) {

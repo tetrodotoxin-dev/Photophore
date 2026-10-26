@@ -15,9 +15,10 @@ namespace Photophore::Vulkan {
 
 // Swapchain contains one `VkSwapchainKHR` and one `VkImageView` for every image
 // returned by its surface. The `Context` device and surface remain accessible
-// through this value. `Renderer` pairs acquired image indices with separate
-// presentation fences because image order is independent of rotating frame
-// slots.
+// through this value. The surface must accept opaque composition because Window
+// exposes no composited transparency contract. `Renderer` pairs acquired image
+// indices with separate presentation fences because image order is independent
+// of rotating frame slots.
 //
 // `create` returns an empty value for an empty device or extent. A populated
 // value contains at most `max_images` handles and remains valid through
@@ -42,8 +43,11 @@ class Swapchain {
   EXPORTED(PHOTOPHORE) auto recreate(const Context& ctx, U32 width, U32 height)
       -> void;
 
-  // Waits for the next presentable image and signals the supplied semaphore.
-  // U32(-1) carries Vulkan's resize request to Renderer.
+  // Waits without a timeout for the next presentable image and signals the
+  // supplied semaphore. U32(-1) reports VK_ERROR_OUT_OF_DATE_KHR without
+  // consuming a frame slot, allowing Renderer to recreate the chain. A
+  // suboptimal chain still returns its acquired image for one complete submit
+  // and present operation.
   EXPORTED(PHOTOPHORE) auto acquire_next_image(
       VkSemaphore signal_semaphore) const -> U32;
 
@@ -54,6 +58,9 @@ class Swapchain {
   EXPORTED(PHOTOPHORE) auto get_image_view(U32 index) const -> VkImageView;
   EXPORTED(PHOTOPHORE) auto get_image_count() const -> U32;
 
+  // Fixed handle storage avoids an allocation in the swapchain lifetime. A
+  // surface returning more than eight images falls outside this rendering
+  // profile and fails before Photophore writes beyond that storage.
   static constexpr U32 max_images = 8;
 
  private:

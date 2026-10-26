@@ -35,8 +35,8 @@ class ShaderProgram {
 
   ShaderProgram() = default;
   EXPORTED(PHOTOPHORE) ~ShaderProgram();
-  // Move operations exchange complete native states. The donor receives the
-  // destination's earlier state and releases it through its ordinary lifetime.
+  // Move assignment exchanges complete native states so the donor releases the
+  // destination's previous pipeline and layout when that donor is destroyed.
   EXPORTED(PHOTOPHORE) ShaderProgram(ShaderProgram&&) noexcept;
   EXPORTED(PHOTOPHORE) auto operator=(ShaderProgram&&) noexcept
       -> ShaderProgram&;

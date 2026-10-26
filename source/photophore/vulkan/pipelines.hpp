@@ -80,7 +80,9 @@ class Pipelines {
   };
 
   struct ProgramEntry {
-    // Stores one VkPipeline selected by Program identity and fixed draw state.
+    // Program identity and fixed draw state form the cache key. Description
+    // storage remains in the construction inventory, while ShaderProgram owns
+    // the format specific VkPipeline and layout selected by that key.
     const Description::Program* description = nullptr;
     Frame::Pipeline pipeline;
     ShaderProgram shader;
