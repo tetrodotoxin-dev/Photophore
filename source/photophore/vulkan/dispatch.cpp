@@ -64,6 +64,8 @@ auto Dispatch::symbol(View::Bytes name) -> void* {
 #endif
 }
 
+#ifndef TOOLCHAIN_WASM
+
 // Resolves every required loader symbol into one unpublished table. Every
 // lookup runs even after an earlier miss so diagnostics and debuggers observe
 // the complete inventory attempt. The caller publishes the table only when
@@ -288,6 +290,8 @@ auto Dispatch::load(Dispatch& available) -> Bool {
       load(available.vkWaitForFences, "vkWaitForFences"_view) && complete;
   return complete;
 }
+
+#endif
 
 auto Dispatch::acquire() -> Bool {
 
