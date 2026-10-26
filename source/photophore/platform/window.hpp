@@ -21,9 +21,9 @@ namespace Photophore::Platform {
 // clear_resize.
 //
 // Native callbacks store the Window address. The value therefore remains at one
-// address and on one thread from construction through destruction. Handles in
-// Presentation remain accessible until Window destruction, so a Renderer made
-// from them ends first.
+// address and on one thread from construction through destruction. A
+// Presentation's context and operations remain accessible until Window
+// destruction, so a Renderer made from them ends first.
 class Window {
  public:
   // EventStatus keeps an ordinary compositor close separate from a platform
@@ -68,8 +68,6 @@ class Window {
   Photophore::Input::Mapping input_mapping;
   Photophore::Input::Snapshot input_snapshot;
   void* native = nullptr;
-  void* connection = nullptr;
-  void* surface = nullptr;
   U32 logical_width = 0;
   U32 logical_height = 0;
   U32 initial_width = 0;

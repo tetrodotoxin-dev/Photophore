@@ -3,50 +3,75 @@
 
 #pragma once
 
+#include <vulkan/vulkan_core.h>
+
 #include "toolchain/toolchain.hpp"
 
 namespace Photophore::Platform {
 
-// Presentation identifies the native window surface used to create a rendering
-// target. Kind selects the matching platform representation. Wayland publishes
-// its display and surface handles, while Win32 publishes its module and window
-// handles. The record keeps native declarations outside the public Window and
-// renderer headers.
+// Presentation lets a Window provider create the Vulkan surface for its native
+// presentation system. The provider supplies one context with the exact
+// operations that interpret it. Vulkan calls those operations without
+// recovering Wayland, Win32 or another provider's state.
 //
-// Window supplies the lifetime of both handles and remains live through the
-// Vulkan surface created from them. Copies preserve the same borrowed handles.
-// Kind::None represents an unavailable presentation path.
+// `get_instance_extension` names the platform extension required before
+// `VkInstance` creation and keeps that null terminated name accessible through
+// creation. `create_surface` uses the resulting instance and its loader to
+// publish one `VkSurfaceKHR`. Both calls are synchronous. Calls use the context
+// supplied with this exact operation table. The provider keeps both accessible
+// through every call and remains live until the resulting Vulkan surface is
+// destroyed. Copies preserve that same access interval.
 class Presentation {
  public:
-  enum class Kind : U64 {
-    None,
-    Wayland,
-    Win32,
+  struct Operations {
+    const char* (*get_instance_extension)(void* context) = nullptr;
+    VkResult (*create_surface)(
+        void* context,
+        VkInstance instance,
+        PFN_vkGetInstanceProcAddr load,
+        VkSurfaceKHR* surface) = nullptr;
   };
 
-  static constexpr auto create(Kind kind, void* host, void* surface)
+  static constexpr auto create(void* context, const Operations& operations)
       -> Presentation {
-    return Presentation(kind, host, surface);
+    return Presentation(context, &operations);
   }
 
-  constexpr auto get_kind() const -> Kind { return kind; }
-  constexpr auto get_host() const -> void* { return host; }
-  constexpr auto get_surface() const -> void* { return surface; }
+  constexpr Presentation() = default;
 
+  // Reports that the context and both required operations are present. Surface
+  // creation reports the provider's current host availability through
+  // VkResult.
   constexpr auto is_valid() const -> Bool {
-    return Bool(kind != Kind::None && host && surface);
+    return Bool(
+        context && operations && operations->get_instance_extension &&
+        operations->create_surface);
+  }
+
+  constexpr auto get_instance_extension() const -> const char* {
+    return is_valid() ? operations->get_instance_extension(context) : nullptr;
+  }
+
+  constexpr auto create_surface(
+      VkInstance instance,
+      PFN_vkGetInstanceProcAddr load,
+      VkSurfaceKHR* surface) const -> VkResult {
+    if (!is_valid() || !instance || !load || !surface) {
+      return VK_ERROR_INITIALIZATION_FAILED;
+    }
+
+    return operations->create_surface(context, instance, load, surface);
   }
 
  private:
-  constexpr Presentation(Kind kind, void* host, void* surface)
-      : kind(kind), host(host), surface(surface) {}
+  constexpr Presentation(void* context, const Operations* operations)
+      : context(context), operations(operations) {}
 
-  Kind kind = Kind::None;
-  void* host = nullptr;
-  void* surface = nullptr;
+  void* context = nullptr;
+  const Operations* operations = nullptr;
 };
 
-static_assert(sizeof(Presentation) == sizeof(U64) + sizeof(void*) * 2);
+static_assert(sizeof(Presentation) == sizeof(void*) * 2);
 static_assert(__is_trivially_copyable(Presentation));
 static_assert(__is_standard_layout(Presentation));
 

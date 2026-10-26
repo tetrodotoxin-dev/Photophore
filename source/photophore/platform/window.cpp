@@ -10,11 +10,17 @@
 
 #ifdef TOOLCHAIN_LINUX
 
+struct wl_display {};
+struct wl_surface {};
+
+#define VK_USE_PLATFORM_WAYLAND_KHR
+
 #include <errno.h>
 #include <poll.h>
 #include <stddef.h>
 #include <string.h>
 #include <unistd.h>
+#include <vulkan/vulkan.h>
 
 #include "perimortem/core/view/null_terminated.hpp"
 #include "perimortem/memory/allocator/arena.hpp"
@@ -29,6 +35,10 @@
 #include <stdio.h>
 #include <windows.h>
 #include <windowsx.h>
+
+#define VK_USE_PLATFORM_WIN32_KHR
+
+#include <vulkan/vulkan.h>
 
 #include "perimortem/memory/thread/vector.hpp"
 
@@ -68,7 +78,6 @@ static auto destroy_native(Type* value) -> void {
 using namespace Perimortem::System;
 
 struct wl_proxy {};
-struct wl_display {};
 
 struct wl_array {
   CppSize size;
@@ -108,8 +117,8 @@ using WaylandDispatcher =
     auto(const void*, void*, U32, const wl_message*, wl_argument*) -> S32;
 
 // Wayland declares dispatcher metadata as const even when that metadata names
-// mutable callback state. This record keeps the ABI pointer const while its
-// stored context retains the provider's original access.
+// state that callbacks update. This record keeps the ABI pointer const while
+// its stored context retains the provider's original access.
 struct CallbackContext {
   void* value;
 };
@@ -889,7 +898,6 @@ Window::Window(U32 width, U32 height, const char* title) {
 
   native = state;
   state->display = client->connect();
-  connection = state->display;
   if (!state->display) {
     failed = True;
     return;
@@ -977,7 +985,6 @@ Window::Window(U32 width, U32 height, const char* title) {
   }
 
   state->surface = client->create_surface(state->compositor);
-  surface = state->surface;
   if (!state->surface) {
     failed = True;
     return;
@@ -1234,7 +1241,33 @@ auto Window::poll_events() -> Window::EventStatus {
 }
 
 auto Window::get_presentation() const -> Presentation {
-  return Presentation::create(Presentation::Kind::Wayland, connection, surface);
+  static const Presentation::Operations operations = {
+    .get_instance_extension =
+        [](void*) { return VK_KHR_WAYLAND_SURFACE_EXTENSION_NAME; },
+    .create_surface =
+        [](void* context, VkInstance instance, PFN_vkGetInstanceProcAddr load,
+           VkSurfaceKHR* output) {
+          auto* state = Data::cast<WaylandWindow>(context);
+          if (!state->display || !state->surface) {
+            return VK_ERROR_INITIALIZATION_FAILED;
+          }
+
+          auto create = Data::bit_cast<PFN_vkCreateWaylandSurfaceKHR>(
+              load(instance, "vkCreateWaylandSurfaceKHR"));
+          if (!create) {
+            return VK_ERROR_EXTENSION_NOT_PRESENT;
+          }
+
+          VkWaylandSurfaceCreateInfoKHR info = {
+            VK_STRUCTURE_TYPE_WAYLAND_SURFACE_CREATE_INFO_KHR};
+
+          info.display = state->display;
+          info.surface = Data::cast<wl_surface>(state->surface);
+          return create(instance, &info, nullptr, output);
+        },
+  };
+
+  return native ? Presentation::create(native, operations) : Presentation();
 }
 
 #elifdef TOOLCHAIN_WINDOWS
@@ -1244,6 +1277,8 @@ auto Window::get_presentation() const -> Presentation {
 // callbacks.
 struct Win32Window {
   ATOM registration = 0;
+  HINSTANCE module = nullptr;
+  HWND surface = nullptr;
 };
 
 Window::Window(U32 width, U32 height, const char* title) {
@@ -1285,14 +1320,14 @@ Window::Window(U32 width, U32 height, const char* title) {
   }
 
   native = state;
-  connection = GetModuleHandleW(nullptr);
+  state->module = GetModuleHandleW(nullptr);
 
   wchar_t class_name[64];
   swprintf(class_name, 64, L"Photophore.%p", Data::cast<void>(this));
 
   WNDCLASSEXW descriptor = {};
   descriptor.cbSize = sizeof(descriptor);
-  descriptor.hInstance = Data::bit_cast<HINSTANCE>(connection);
+  descriptor.hInstance = state->module;
   descriptor.lpszClassName = class_name;
   descriptor.hCursor = LoadCursorW(nullptr, IDC_ARROW);
   descriptor.lpfnWndProc = [](HWND handle, UINT message, WPARAM wparam,
@@ -1304,7 +1339,7 @@ Window::Window(U32 width, U32 height, const char* title) {
     if (message == WM_NCCREATE) {
       auto* creation = Data::bit_cast<CREATESTRUCTW*>(lparam);
       window = Data::cast<Window>(creation->lpCreateParams);
-      window->surface = handle;
+      Data::cast<Win32Window>(window->native)->surface = handle;
       SetWindowLongPtrW(
           handle, GWLP_USERDATA, Data::bit_cast<LONG_PTR>(window));
     }
@@ -1320,7 +1355,7 @@ Window::Window(U32 width, U32 height, const char* title) {
       return 0;
     case WM_NCDESTROY:
       window->close_requested = True;
-      window->surface = nullptr;
+      Data::cast<Win32Window>(window->native)->surface = nullptr;
       SetWindowLongPtrW(handle, GWLP_USERDATA, 0);
       break;
     case WM_SIZE: {
@@ -1479,40 +1514,37 @@ Window::Window(U32 width, U32 height, const char* title) {
   const S64 outer_height = S64(area.bottom) - area.top;
   if (adjusted && outer_width <= S32(U32(-1) >> 1) &&
       outer_height <= S32(U32(-1) >> 1)) {
-    surface = CreateWindowExW(
+    state->surface = CreateWindowExW(
         0, MAKEINTATOM(state->registration), text.get_data(),
         WS_OVERLAPPEDWINDOW, CW_USEDEFAULT, CW_USEDEFAULT, S32(outer_width),
-        S32(outer_height), nullptr, nullptr,
-        Data::bit_cast<HINSTANCE>(connection), this);
+        S32(outer_height), nullptr, nullptr, state->module, this);
   }
 
   if (awareness) {
     SetThreadDpiAwarenessContext(awareness);
   }
 
-  if (!surface) {
+  if (!state->surface) {
     failed = True;
     return;
   }
 
-  ShowWindow(Data::bit_cast<HWND>(surface), SW_SHOW);
+  ShowWindow(state->surface, SW_SHOW);
 
   RECT client;
-  if (GetClientRect(Data::bit_cast<HWND>(surface), &client)) {
+  if (GetClientRect(state->surface, &client)) {
     configure(*this, U32(client.right), U32(client.bottom));
   }
 }
 
 Window::~Window() {
-  if (surface) {
-    DestroyWindow(Data::bit_cast<HWND>(surface));
+  auto* state = Data::cast<Win32Window>(native);
+  if (state && state->surface) {
+    DestroyWindow(state->surface);
   }
 
-  auto* state = Data::cast<Win32Window>(native);
   if (state && state->registration) {
-    UnregisterClassW(
-        MAKEINTATOM(state->registration),
-        Data::bit_cast<HINSTANCE>(connection));
+    UnregisterClassW(MAKEINTATOM(state->registration), state->module);
   }
 
   destroy_native(state);
@@ -1527,9 +1559,9 @@ auto Window::poll_events() -> EventStatus {
   // thread state, so preserve it for the application pump after marking this
   // window closed.
 
+  auto* state = Data::cast<Win32Window>(native);
   MSG message;
-  while (
-      PeekMessageW(&message, Data::bit_cast<HWND>(surface), 0, 0, PM_REMOVE)) {
+  while (PeekMessageW(&message, state->surface, 0, 0, PM_REMOVE)) {
     if (message.message == WM_QUIT) {
       close_requested = True;
       PostQuitMessage(S32(message.wParam));
@@ -1548,7 +1580,33 @@ auto Window::poll_events() -> EventStatus {
 }
 
 auto Window::get_presentation() const -> Presentation {
-  return Presentation::create(Presentation::Kind::Win32, connection, surface);
+  static const Presentation::Operations operations = {
+    .get_instance_extension =
+        [](void*) { return VK_KHR_WIN32_SURFACE_EXTENSION_NAME; },
+    .create_surface =
+        [](void* context, VkInstance instance, PFN_vkGetInstanceProcAddr load,
+           VkSurfaceKHR* output) {
+          auto* state = Data::cast<Win32Window>(context);
+          if (!state->module || !state->surface) {
+            return VK_ERROR_INITIALIZATION_FAILED;
+          }
+
+          auto create = Data::bit_cast<PFN_vkCreateWin32SurfaceKHR>(
+              load(instance, "vkCreateWin32SurfaceKHR"));
+          if (!create) {
+            return VK_ERROR_EXTENSION_NOT_PRESENT;
+          }
+
+          VkWin32SurfaceCreateInfoKHR info = {
+            VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR};
+
+          info.hinstance = state->module;
+          info.hwnd = state->surface;
+          return create(instance, &info, nullptr, output);
+        },
+  };
+
+  return native ? Presentation::create(native, operations) : Presentation();
 }
 
 #else
@@ -1568,7 +1626,7 @@ auto Window::poll_events() -> EventStatus {
 }
 
 auto Window::get_presentation() const -> Presentation {
-  return Presentation::create(Presentation::Kind::None, nullptr, nullptr);
+  return Presentation();
 }
 
 #endif
@@ -1577,7 +1635,7 @@ auto Window::get_presentation() const -> Presentation {
 // callbacks. Common accessors keep event status, extent and input observations
 // consistent across Wayland, Win32 and browser builds.
 auto Window::get_event_status() const -> Window::EventStatus {
-  if (failed || !connection) {
+  if (failed || !native) {
     return EventStatus::Failed;
   }
 

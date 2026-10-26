@@ -7,8 +7,6 @@
 
 #include "perimortem/core/view/bytes.hpp"
 
-#include "photophore/platform/presentation.hpp"
-
 namespace Photophore::Vulkan {
 
 // These declarations form Photophore's process wide function table for the
@@ -18,21 +16,14 @@ namespace Photophore::Vulkan {
 // library. Recording uses the immutable table directly after acquisition.
 //
 // The pointers come from loader exports and serve every Context, including
-// windows backed by different devices. Each platform file publishes the surface
-// extension and creation operation for its Presentation kind. The WebAssembly
-// implementation reports an unavailable native Vulkan path through these same
-// operations.
+// windows backed by different devices. Presentation providers receive
+// `vkGetInstanceProcAddr` from this table and create their own platform
+// surface.
 class Dispatch {
  public:
   static auto acquire() -> Bool;
   static auto release() -> void;
   static auto symbol(Perimortem::Core::View::Bytes name) -> void*;
-  static auto surface_extension(Platform::Presentation::Kind kind) -> const
-      char*;
-  static auto create_surface(
-      VkInstance instance,
-      Platform::Presentation presentation,
-      VkSurfaceKHR* surface) -> VkResult;
 
 #define PHOTOPHORE_VULKAN(name) static PFN_##name name;
 

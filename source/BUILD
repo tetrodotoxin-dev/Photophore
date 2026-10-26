@@ -52,7 +52,10 @@ _COMPONENT_DEPS = {
         "@perimortem//:memory",
     ],
     "input": ["@perimortem//:core"],
-    "platform": ["@perimortem//:core"],
+    "platform": [
+        "@perimortem//:core",
+        "@vulkan_headers",
+    ],
     "scene": ["@perimortem//:core"],
     "vulkan": [
         "@perimortem//:core",

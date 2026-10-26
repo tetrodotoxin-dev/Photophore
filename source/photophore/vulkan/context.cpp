@@ -279,10 +279,10 @@ static auto find_graphics_queue_family(
 
 auto Context::create(Presentation presentation) -> Context {
   Context ctx;
-  const char* extension = Dispatch::surface_extension(presentation.get_kind());
-  // Surface kind is known before loader acquisition. A valid Presentation and
-  // one Vulkan reservation establish the native entry conditions for every
-  // handle published through ctx.
+  const char* extension = presentation.get_instance_extension();
+  // The provider declares its instance extension before loader acquisition. A
+  // valid Presentation and one Vulkan reservation establish the native entry
+  // conditions for every handle published through ctx.
   if (!presentation.is_valid() || !extension || !Dispatch::acquire()) {
     return ctx;
   }
@@ -349,7 +349,8 @@ auto Context::create(Presentation presentation) -> Context {
     return Context();
   }
 
-  if (Dispatch::create_surface(ctx.instance, presentation, &ctx.surface) !=
+  if (presentation.create_surface(
+          ctx.instance, Dispatch::vkGetInstanceProcAddr, &ctx.surface) !=
       VK_SUCCESS) {
     ctx.surface = VK_NULL_HANDLE;
     return Context();
