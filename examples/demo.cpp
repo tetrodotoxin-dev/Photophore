@@ -140,13 +140,21 @@ static auto make_batch(
 }
 
 static auto read_frame_limit(S32 count, char** values) -> Count {
-  if (count < 2) {
+  constexpr Count argument_capacity = 32;
+  if (count < 2 || !values || !values[1]) {
+    return 0;
+  }
+
+  const auto argument =
+      View::NullTerminated(values[1], argument_capacity).get_view();
+  if (argument.get_size() == argument_capacity) {
     return 0;
   }
 
   char* end = nullptr;
   U64 limit = strtoull(values[1], &end, 10);
-  return end != values[1] && *end == 0 ? limit : 0;
+  return end == values[1] + argument.get_size() && !argument.is_empty() ? limit
+                                                                        : 0;
 }
 
 static auto configure_controls(Window& window) -> void {
@@ -211,7 +219,7 @@ static auto advance_bounce(R64 elapsed_seconds, R64& offset, R64& direction)
   }
 }
 
-static auto run(Window& window, S32 count, char** values) -> S32 {
+static auto run(Window& window, Count frame_limit) -> S32 {
   constexpr U32 initial_width = 800;
   constexpr U32 initial_height = 600;
   configure_controls(window);
@@ -221,7 +229,9 @@ static auto run(Window& window, S32 count, char** values) -> S32 {
       initial_height * window.get_scale());
   if (!renderer.get_context().get_device() ||
       !renderer.get_swapchain().get_swapchain()) {
-    fputs("Photophore could not create a Vulkan renderer.\n", stderr);
+    constexpr auto message =
+        "Photophore could not create a Vulkan renderer.\n\0"_view;
+    fputs(Data::cast<const char>(message.get_data()), stderr);
     return 2;
   }
 
@@ -236,7 +246,9 @@ static auto run(Window& window, S32 count, char** values) -> S32 {
   Matrix<Srgba8> orientation =
       as_srgba8(Formats::Png::decode(orientation_png.get_view()));
   if (!has_expected_orientation(orientation)) {
-    fputs("Photophore could not decode the orientation PNG.\n", stderr);
+    constexpr auto message =
+        "Photophore could not decode the orientation PNG.\n\0"_view;
+    fputs(Data::cast<const char>(message.get_data()), stderr);
     return 3;
   }
 
@@ -246,19 +258,18 @@ static auto run(Window& window, S32 count, char** values) -> S32 {
           Sampler2D::Addressing::Clamp, Sampler2D::Filtering::Nearest));
   Texture2D overlay = Texture2D::create(Pixels2D::create(make_overlay()));
   const Program program = SpriteProgram::get_program();
-  const Count frame_limit = read_frame_limit(count, values);
   Count frames = 0;
   R64 controlled_x = 64.0;
   R64 controlled_y = 96.0;
   R64 bounce_offset = 0.0;
   R64 bounce_direction = 1.0;
   Diagnostics::Time previous_time = Diagnostics::Time::now();
-  fputs(
-      "Controls: WASD or arrows move, Space changes tone, Escape exits.\n",
-      stdout);
-  fputs(
-      "PNG corners: red and green on top, blue and yellow on bottom.\n",
-      stdout);
+  constexpr auto controls =
+      "Controls: WASD or arrows move, Space changes tone, Escape exits.\n\0"_view;
+  constexpr auto orientation_message =
+      "PNG corners: red and green on top, blue and yellow on bottom.\n\0"_view;
+  fputs(Data::cast<const char>(controls.get_data()), stdout);
+  fputs(Data::cast<const char>(orientation_message.get_data()), stdout);
 
   while (window.poll_events() == Window::EventStatus::Ready &&
          (frame_limit == 0 || frames < frame_limit)) {
@@ -314,7 +325,9 @@ static auto run(Window& window, S32 count, char** values) -> S32 {
     renderer.end_frame(frame);
     if (!recorded) {
       renderer.wait_idle();
-      fputs("Photophore rejected the demo frame.\n", stderr);
+
+      constexpr auto message = "Photophore rejected the demo frame.\n\0"_view;
+      fputs(Data::cast<const char>(message.get_data()), stderr);
       return 4;
     }
 
@@ -322,24 +335,28 @@ static auto run(Window& window, S32 count, char** values) -> S32 {
   }
 
   renderer.wait_idle();
-  printf("Photophore presented %llu frames.\n", frames);
+
+  constexpr auto completion_format =
+      "Photophore presented %llu frames.\n\0"_view;
+  printf(Data::cast<const char>(completion_format.get_data()), frames);
   return 0;
 }
 
 S32 main(S32 count, char** values) {
   constexpr U32 initial_width = 800;
   constexpr U32 initial_height = 600;
+  const Count frame_limit = read_frame_limit(count, values);
 
   return Window::create(
              initial_width, initial_height,
              "Photophore interactive rendering demo"_view)
       .visit(
-          [count, values](Window& window) {
-            return run(window, count, values);
-          },
+          [frame_limit](Window& window) { return run(window, frame_limit); },
 
           [] {
-            fputs("Photophore could not create a native window.\n", stderr);
+            constexpr auto message =
+                "Photophore could not create a native window.\n\0"_view;
+            fputs(Data::cast<const char>(message.get_data()), stderr);
             return S32(1);
           });
 }

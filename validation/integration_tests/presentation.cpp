@@ -6,11 +6,13 @@
 // than skipping it.
 #include <stdio.h>
 
+#include "perimortem/core/data.hpp"
 #include "perimortem/core/view/null_terminated.hpp"
 
 #include "photophore/platform/window.hpp"
 #include "photophore/vulkan/renderer.hpp"
 
+using namespace Perimortem::Core;
 using namespace Photophore::Platform;
 using namespace Photophore::Vulkan;
 
@@ -44,7 +46,10 @@ static auto present(Window& window) -> S32 {
   }
 
   renderer.wait_idle();
-  printf("Presented %u frames through Vulkan.\n", completed);
+
+  constexpr auto completion_format =
+      "Presented %u frames through Vulkan.\n\0"_view;
+  printf(Data::cast<const char>(completion_format.get_data()), completed);
   return completed == 3 ? 0 : 4;
 }
 

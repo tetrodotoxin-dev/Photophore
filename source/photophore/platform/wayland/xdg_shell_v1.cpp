@@ -5,10 +5,9 @@
 
 #ifdef TOOLCHAIN_LINUX
 
-#include <string.h>
-
 #include "perimortem/core/data.hpp"
 #include "perimortem/core/storage/vector.hpp"
+#include "perimortem/core/view/null_terminated.hpp"
 
 using namespace Perimortem::Core;
 using namespace Photophore::Platform;
@@ -38,6 +37,8 @@ extern const Wayland::ABI::Interface photophore_xdg_v1_surface_interface;
 extern const Wayland::ABI::Interface photophore_xdg_v1_toplevel_interface;
 extern const Wayland::ABI::Interface photophore_xdg_v1_popup_interface;
 
+static auto c_string(View::Bytes value) -> const char*;
+
 // Each type table follows the corresponding wire arguments in order. An
 // interface entry tells libwayland which proxy to create for a new object.
 // Scalar arguments retain a null entry.
@@ -50,41 +51,43 @@ static Storage::Vector<const Wayland::ABI::Interface*, 2> get_surface_types = {{
 }};
 
 const Storage::Vector<Wayland::ABI::Message, 4> wm_base_requests = {{
-  Wayland::ABI::Message{"destroy", "", nullptr},
-  {"create_positioner", "n", create_positioner_types.get_data()},
-  {"get_xdg_surface", "no", get_surface_types.get_data()},
-  {"pong", "u", nullptr},
+  Wayland::ABI::Message{
+    c_string("destroy\0"_view), c_string("\0"_view), nullptr},
+
+  {c_string("create_positioner\0"_view), c_string("n\0"_view),
+   create_positioner_types.get_data()},
+
+  {c_string("get_xdg_surface\0"_view), c_string("no\0"_view),
+   get_surface_types.get_data()},
+
+  {c_string("pong\0"_view), c_string("u\0"_view), nullptr},
 }};
 
 const Storage::Vector<Wayland::ABI::Message, 1> wm_base_events = {
-  {Wayland::ABI::Message{"ping", "u", nullptr}}};
+  {Wayland::ABI::Message{
+    c_string("ping\0"_view), c_string("u\0"_view), nullptr}}};
 
 const Wayland::ABI::Interface wm_base_interface = {
-  "xdg_wm_base",
-  1,
-  S32(wm_base_requests.get_size()),
-  wm_base_requests.get_data(),
-  S32(wm_base_events.get_size()),
-  wm_base_events.get_data(),
+  c_string("xdg_wm_base\0"_view),   1,
+  S32(wm_base_requests.get_size()), wm_base_requests.get_data(),
+  S32(wm_base_events.get_size()),   wm_base_events.get_data(),
 };
 
 const Storage::Vector<Wayland::ABI::Message, 7> positioner_requests = {{
-  Wayland::ABI::Message{"destroy", "", nullptr},
-  {"set_size", "ii", nullptr},
-  {"set_anchor_rect", "iiii", nullptr},
-  {"set_anchor", "u", nullptr},
-  {"set_gravity", "u", nullptr},
-  {"set_constraint_adjustment", "u", nullptr},
-  {"set_offset", "ii", nullptr},
+  Wayland::ABI::Message{
+    c_string("destroy\0"_view), c_string("\0"_view), nullptr},
+
+  {c_string("set_size\0"_view), c_string("ii\0"_view), nullptr},
+  {c_string("set_anchor_rect\0"_view), c_string("iiii\0"_view), nullptr},
+  {c_string("set_anchor\0"_view), c_string("u\0"_view), nullptr},
+  {c_string("set_gravity\0"_view), c_string("u\0"_view), nullptr},
+  {c_string("set_constraint_adjustment\0"_view), c_string("u\0"_view), nullptr},
+  {c_string("set_offset\0"_view), c_string("ii\0"_view), nullptr},
 }};
 
 const Wayland::ABI::Interface photophore_xdg_v1_positioner_interface = {
-  "xdg_positioner",
-  1,
-  S32(positioner_requests.get_size()),
-  positioner_requests.get_data(),
-  0,
-  nullptr,
+  c_string("xdg_positioner\0"_view), 1, S32(positioner_requests.get_size()),
+  positioner_requests.get_data(),    0, nullptr,
 };
 
 static Storage::Vector<const Wayland::ABI::Interface*, 1> get_toplevel_types = {
@@ -97,23 +100,27 @@ static Storage::Vector<const Wayland::ABI::Interface*, 3> get_popup_types = {{
 }};
 
 const Storage::Vector<Wayland::ABI::Message, 5> surface_requests = {{
-  Wayland::ABI::Message{"destroy", "", nullptr},
-  {"get_toplevel", "n", get_toplevel_types.get_data()},
-  {"get_popup", "n?oo", get_popup_types.get_data()},
-  {"set_window_geometry", "iiii", nullptr},
-  {"ack_configure", "u", nullptr},
+  Wayland::ABI::Message{
+    c_string("destroy\0"_view), c_string("\0"_view), nullptr},
+
+  {c_string("get_toplevel\0"_view), c_string("n\0"_view),
+   get_toplevel_types.get_data()},
+
+  {c_string("get_popup\0"_view), c_string("n?oo\0"_view),
+   get_popup_types.get_data()},
+
+  {c_string("set_window_geometry\0"_view), c_string("iiii\0"_view), nullptr},
+  {c_string("ack_configure\0"_view), c_string("u\0"_view), nullptr},
 }};
 
 const Storage::Vector<Wayland::ABI::Message, 1> surface_events = {
-  {Wayland::ABI::Message{"configure", "u", nullptr}}};
+  {Wayland::ABI::Message{
+    c_string("configure\0"_view), c_string("u\0"_view), nullptr}}};
 
 const Wayland::ABI::Interface photophore_xdg_v1_surface_interface = {
-  "xdg_surface",
-  1,
-  S32(surface_requests.get_size()),
-  surface_requests.get_data(),
-  S32(surface_events.get_size()),
-  surface_events.get_data(),
+  c_string("xdg_surface\0"_view),   1,
+  S32(surface_requests.get_size()), surface_requests.get_data(),
+  S32(surface_events.get_size()),   surface_events.get_data(),
 };
 
 static Storage::Vector<const Wayland::ABI::Interface*, 1> set_parent_types = {
@@ -142,34 +149,41 @@ static Storage::Vector<const Wayland::ABI::Interface*, 1> set_fullscreen_types =
     {{&Wayland::ABI::wl_output_interface}};
 
 const Storage::Vector<Wayland::ABI::Message, 14> toplevel_requests = {{
-  Wayland::ABI::Message{"destroy", "", nullptr},
-  {"set_parent", "?o", set_parent_types.get_data()},
-  {"set_title", "s", nullptr},
-  {"set_app_id", "s", nullptr},
-  {"show_window_menu", "ouii", show_window_menu_types.get_data()},
-  {"move", "ou", move_types.get_data()},
-  {"resize", "ouu", resize_types.get_data()},
-  {"set_max_size", "ii", nullptr},
-  {"set_min_size", "ii", nullptr},
-  {"set_maximized", "", nullptr},
-  {"unset_maximized", "", nullptr},
-  {"set_fullscreen", "?o", set_fullscreen_types.get_data()},
-  {"unset_fullscreen", "", nullptr},
-  {"set_minimized", "", nullptr},
+  Wayland::ABI::Message{
+    c_string("destroy\0"_view), c_string("\0"_view), nullptr},
+
+  {c_string("set_parent\0"_view), c_string("?o\0"_view),
+   set_parent_types.get_data()},
+
+  {c_string("set_title\0"_view), c_string("s\0"_view), nullptr},
+  {c_string("set_app_id\0"_view), c_string("s\0"_view), nullptr},
+  {c_string("show_window_menu\0"_view), c_string("ouii\0"_view),
+   show_window_menu_types.get_data()},
+
+  {c_string("move\0"_view), c_string("ou\0"_view), move_types.get_data()},
+  {c_string("resize\0"_view), c_string("ouu\0"_view), resize_types.get_data()},
+  {c_string("set_max_size\0"_view), c_string("ii\0"_view), nullptr},
+  {c_string("set_min_size\0"_view), c_string("ii\0"_view), nullptr},
+  {c_string("set_maximized\0"_view), c_string("\0"_view), nullptr},
+  {c_string("unset_maximized\0"_view), c_string("\0"_view), nullptr},
+  {c_string("set_fullscreen\0"_view), c_string("?o\0"_view),
+   set_fullscreen_types.get_data()},
+
+  {c_string("unset_fullscreen\0"_view), c_string("\0"_view), nullptr},
+  {c_string("set_minimized\0"_view), c_string("\0"_view), nullptr},
 }};
 
 const Storage::Vector<Wayland::ABI::Message, 2> toplevel_events = {{
-  Wayland::ABI::Message{"configure", "iia", nullptr},
-  {"close", "", nullptr},
+  Wayland::ABI::Message{
+    c_string("configure\0"_view), c_string("iia\0"_view), nullptr},
+
+  {c_string("close\0"_view), c_string("\0"_view), nullptr},
 }};
 
 const Wayland::ABI::Interface photophore_xdg_v1_toplevel_interface = {
-  "xdg_toplevel",
-  1,
-  S32(toplevel_requests.get_size()),
-  toplevel_requests.get_data(),
-  S32(toplevel_events.get_size()),
-  toplevel_events.get_data(),
+  c_string("xdg_toplevel\0"_view),   1,
+  S32(toplevel_requests.get_size()), toplevel_requests.get_data(),
+  S32(toplevel_events.get_size()),   toplevel_events.get_data(),
 };
 
 static Storage::Vector<const Wayland::ABI::Interface*, 2> popup_grab_types = {{
@@ -178,22 +192,23 @@ static Storage::Vector<const Wayland::ABI::Interface*, 2> popup_grab_types = {{
 }};
 
 const Storage::Vector<Wayland::ABI::Message, 2> popup_requests = {{
-  Wayland::ABI::Message{"destroy", "", nullptr},
-  {"grab", "ou", popup_grab_types.get_data()},
+  Wayland::ABI::Message{
+    c_string("destroy\0"_view), c_string("\0"_view), nullptr},
+
+  {c_string("grab\0"_view), c_string("ou\0"_view), popup_grab_types.get_data()},
 }};
 
 const Storage::Vector<Wayland::ABI::Message, 2> popup_events = {{
-  Wayland::ABI::Message{"configure", "iiii", nullptr},
-  {"popup_done", "", nullptr},
+  Wayland::ABI::Message{
+    c_string("configure\0"_view), c_string("iiii\0"_view), nullptr},
+
+  {c_string("popup_done\0"_view), c_string("\0"_view), nullptr},
 }};
 
 const Wayland::ABI::Interface photophore_xdg_v1_popup_interface = {
-  "xdg_popup",
-  1,
-  S32(popup_requests.get_size()),
-  popup_requests.get_data(),
-  S32(popup_events.get_size()),
-  popup_events.get_data(),
+  c_string("xdg_popup\0"_view),   1,
+  S32(popup_requests.get_size()), popup_requests.get_data(),
+  S32(popup_events.get_size()),   popup_events.get_data(),
 };
 
 static auto c_string(View::Bytes value) -> const char* {
@@ -204,8 +219,8 @@ static auto c_string(View::Bytes value) -> const char* {
   return Data::cast<const char>(value.get_data());
 }
 
-auto Wayland::XdgShellV1::matches(const char* interface) -> Bool {
-  return Bool(interface && !strcmp(interface, wm_base_interface.name));
+auto Wayland::XdgShellV1::matches(View::Bytes interface) -> Bool {
+  return interface == "xdg_wm_base"_view;
 }
 
 auto Wayland::XdgShellV1::bind(Wayland::ABI::Proxy* registry, U32 name)

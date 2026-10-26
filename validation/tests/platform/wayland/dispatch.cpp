@@ -27,6 +27,8 @@ using namespace Perimortem::Core;
 using namespace Photophore::Input;
 
 static Harness WaylandDispatch = {.name = "Photophore::Wayland::Dispatch"};
+static constexpr auto wayland_socket_environment = "WAYLAND_SOCKET\0"_view;
+static constexpr auto decimal_format = "%d\0"_view;
 
 // A private protocol peer supplies real wire messages to the shipped client
 // library. No compositor, display device or Vulkan driver participates. Testing
@@ -104,16 +106,16 @@ static auto event(
 }
 
 static auto
-    global(ProtocolPeer& peer, U32 name, const char* interface, U32 version)
+    global(ProtocolPeer& peer, U32 name, View::Bytes interface, U32 version)
         -> void {
   Storage::Vector<U32, 32> packet;
-  CppSize length = strlen(interface) + 1;
+  CppSize length = interface.get_size() + 1;
   CppSize words = (length + 3) / 4;
   packet[0] = peer.objects[ProtocolPeer::Registry];
   packet[1] = U32((5 + words) * 4) << 16;
   packet[2] = name;
   packet[3] = U32(length);
-  memcpy(packet.get_data() + 4, interface, length);
+  memcpy(packet.get_data() + 4, interface.get_data(), interface.get_size());
   packet[4 + words] = version;
   send_packet(peer, packet, (5 + words) * 4);
 }
@@ -191,9 +193,9 @@ static auto serve(void* context) -> void* {
     U32 opcode = packet[1] & 0xffff;
     if (object == 1 && opcode == 1) {
       peer.objects[P::Registry] = packet[2];
-      global(peer, 1, "wl_compositor", 6);
-      global(peer, 2, "xdg_wm_base", 1);
-      global(peer, 3, "wl_seat", 9);
+      global(peer, 1, "wl_compositor"_view, 6);
+      global(peer, 2, "xdg_wm_base"_view, 1);
+      global(peer, 3, "wl_seat"_view, 9);
     } else if (object == 1 && opcode == 0) {
       Storage::Vector<U32, 3> done = {{packet[2], 12u << 16, 1}};
       send_packet(peer, done);
@@ -253,7 +255,9 @@ VALIDATION_TEST(WaylandDispatch, protocol_events) {
   ASSERT(pthread_create(&peer.thread, nullptr, serve, &peer) == 0);
   peer.started = true;
 
-  const char* previous = getenv("WAYLAND_SOCKET");
+  const char* environment =
+      Data::cast<const char>(wayland_socket_environment.get_data());
+  const char* previous = getenv(environment);
   Storage::Vector<char, 64> saved;
   Bool restore_previous = Bool(previous != nullptr);
   if (restore_previous) {
@@ -266,14 +270,16 @@ VALIDATION_TEST(WaylandDispatch, protocol_events) {
   }
 
   Storage::Vector<char, 32> descriptor;
-  snprintf(descriptor.get_data(), descriptor.get_size(), "%d", sockets[0]);
-  setenv("WAYLAND_SOCKET", descriptor.get_data(), 1);
+  snprintf(
+      descriptor.get_data(), descriptor.get_size(),
+      Data::cast<const char>(decimal_format.get_data()), sockets[0]);
+  setenv(environment, descriptor.get_data(), 1);
 
   auto available = Window::create(96, 64, "Private protocol check"_view);
   if (restore_previous) {
-    setenv("WAYLAND_SOCKET", saved.get_data(), 1);
+    setenv(environment, saved.get_data(), 1);
   } else {
-    unsetenv("WAYLAND_SOCKET");
+    unsetenv(environment);
   }
 
   Bool created = False;

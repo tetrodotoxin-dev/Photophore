@@ -104,6 +104,7 @@ auto ShaderProgram::create(
     Pipeline pipeline,
     View::Vector<VkDescriptorSetLayout> descriptor_set_layouts)
     -> ShaderProgram {
+  static constexpr auto default_entry = "main\0"_bytes;
   const auto source_modules = render.modules;
   const auto source_host_input_ranges = render.host_input_ranges;
   if (source_modules.is_empty() ||
@@ -193,7 +194,7 @@ auto ShaderProgram::create(
     stages[i].stage = to_vk_stage(module.stage);
     stages[i].module = shader_modules[i];
     if (module.entry.is_empty()) {
-      stages[i].pName = "main";
+      stages[i].pName = Data::cast<const char>(default_entry.get_data());
     } else {
       entry_names[i] = module.entry;
       entry_names[i].append(0);

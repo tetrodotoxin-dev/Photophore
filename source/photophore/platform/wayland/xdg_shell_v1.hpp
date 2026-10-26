@@ -24,7 +24,7 @@ enum class WmBaseEvent : U32 { Ping };
 enum class SurfaceEvent : U32 { Configure };
 enum class ToplevelEvent : U32 { Configure, Close };
 
-auto matches(const char* interface) -> Bool;
+auto matches(Perimortem::Core::View::Bytes interface) -> Bool;
 auto bind(ABI::Proxy* registry, U32 name) -> ABI::Proxy*;
 
 auto get_surface(ABI::Proxy* shell, ABI::Proxy* surface) -> ABI::Proxy*;

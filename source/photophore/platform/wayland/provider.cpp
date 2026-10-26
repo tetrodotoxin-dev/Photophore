@@ -7,7 +7,6 @@
 
 #include <errno.h>
 #include <poll.h>
-#include <string.h>
 #include <unistd.h>
 #include <vulkan/vulkan_core.h>
 #include <vulkan/vulkan_wayland.h>
@@ -21,6 +20,8 @@
 using namespace Perimortem::Core;
 using namespace Perimortem::Memory;
 using namespace Photophore::Platform;
+
+static constexpr Count interface_name_capacity = 256;
 
 static auto provider(void* context) -> Wayland::Provider& {
   return *Data::cast<Wayland::Provider>(context);
@@ -82,7 +83,9 @@ auto Wayland::Provider::initialize(U32 width, U32 height, View::Bytes title)
     case Wayland::Client::RegistryEvent::Global:
       window.register_global(
           Data::cast<Wayland::ABI::Proxy>(target), arguments[0].u,
-          arguments[1].s, arguments[2].u);
+          View::NullTerminated(arguments[1].s, interface_name_capacity)
+              .get_view(),
+          arguments[2].u);
       return 0;
 
     case Wayland::Client::RegistryEvent::GlobalRemove:
@@ -227,10 +230,9 @@ auto Wayland::Provider::initialize(U32 width, U32 height, View::Bytes title)
 auto Wayland::Provider::register_global(
     Wayland::ABI::Proxy* registry,
     U32 name,
-    const char* interface,
+    View::Bytes interface,
     U32 version) -> void {
-  if (!strcmp(interface, Wayland::ABI::wl_compositor_interface.name) &&
-      !compositor) {
+  if (interface == "wl_compositor"_view && !compositor) {
     const U32 selected_version = Wayland::Client::select_version(
         version, Wayland::ABI::wl_compositor_interface, 6);
     if (selected_version == 0) {
@@ -272,7 +274,7 @@ auto Wayland::Provider::register_global(
     return;
   }
 
-  if (strcmp(interface, Wayland::ABI::wl_seat_interface.name) || seat) {
+  if (interface != "wl_seat"_view || seat) {
     return;
   }
 
@@ -621,8 +623,9 @@ auto Wayland::Provider::get_presentation() -> Presentation {
             return VK_ERROR_INITIALIZATION_FAILED;
           }
 
+          constexpr auto function_name = "vkCreateWaylandSurfaceKHR\0"_view;
           auto create = Data::bit_cast<PFN_vkCreateWaylandSurfaceKHR>(
-              load(instance, "vkCreateWaylandSurfaceKHR"));
+              load(instance, Data::cast<const char>(function_name.get_data())));
           if (!create) {
             return VK_ERROR_EXTENSION_NOT_PRESENT;
           }

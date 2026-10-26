@@ -19,10 +19,14 @@ using namespace Photophore::Vulkan;
 
 #ifdef PERI_DEBUG
 
-constexpr Storage::Vector<const char*, 1> validation_layers = {
-  {"VK_LAYER_KHRONOS_validation"}};
+static constexpr auto validation_layer = "VK_LAYER_KHRONOS_validation\0"_bytes;
+static const Storage::Vector<const char*, 1> validation_layers = {{
+  Data::cast<const char>(validation_layer.get_data()),
+}};
 
 #endif
+
+static constexpr auto application_name = "Photophore\0"_bytes;
 
 static auto require_success(VkResult result, View::Bytes message) -> void {
   if (result != VK_SUCCESS) {
@@ -336,7 +340,8 @@ auto Context::create(Presentation presentation) -> Context {
   }
 
   VkApplicationInfo app_info = {VK_STRUCTURE_TYPE_APPLICATION_INFO};
-  app_info.pApplicationName = "Photophore";
+  app_info.pApplicationName =
+      Data::cast<const char>(application_name.get_data());
   app_info.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
   app_info.apiVersion = VK_API_VERSION_1_3;
 
@@ -347,7 +352,8 @@ auto Context::create(Presentation presentation) -> Context {
 
 #ifdef PERI_DEBUG
 
-  if (instance_layer_available("VK_LAYER_KHRONOS_validation"_view)) {
+  if (instance_layer_available(
+          validation_layer.slice(0, validation_layer.get_size() - 1))) {
     instance_info.enabledLayerCount = U32(validation_layers.get_size());
     instance_info.ppEnabledLayerNames = validation_layers.get_data();
   }

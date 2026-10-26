@@ -42,7 +42,7 @@ class Provider final : public Window::Provider {
   auto register_global(
       Wayland::ABI::Proxy* registry,
       U32 name,
-      const char* interface,
+      Perimortem::Core::View::Bytes interface,
       U32 version) -> void;
   auto remove_global(U32 name) -> void;
   auto update_seat(U32 capabilities) -> void;

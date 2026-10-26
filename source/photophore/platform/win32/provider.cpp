@@ -14,7 +14,9 @@
 #include <vulkan/vulkan.h>
 
 #include "perimortem/core/data.hpp"
+#include "perimortem/core/storage/vector.hpp"
 #include "perimortem/core/synchronization/mutex.hpp"
+#include "perimortem/core/view/null_terminated.hpp"
 #include "perimortem/memory/thread/vector.hpp"
 
 #pragma comment(lib, "user32.lib")
@@ -32,6 +34,12 @@ struct WindowClassRegistration {
 };
 
 static Synchronization::Mutex class_mutex;
+static constexpr Storage::Vector<wchar_t, 31> window_class_name = {{
+  L'T', L'e', L't', L'r', L'o', L'd', L'o', L't', L'o',  L'x', L'i',
+  L'n', L'.', L'P', L'h', L'o', L't', L'o', L'p', L'h',  L'o', L'r',
+  L'e', L'.', L'W', L'i', L'n', L'd', L'o', L'w', L'\0',
+}};
+
 static ATOM class_atom = 0;
 static HINSTANCE class_module = nullptr;
 static Count class_windows = 0;
@@ -56,7 +64,7 @@ static auto acquire_window_class(WNDPROC process) -> WindowClassRegistration {
   WNDCLASSEXW descriptor = {};
   descriptor.cbSize = sizeof(descriptor);
   descriptor.hInstance = class_module;
-  descriptor.lpszClassName = L"Tetrodotoxin.Photophore.Window";
+  descriptor.lpszClassName = window_class_name.get_data();
   descriptor.hCursor = LoadCursorW(nullptr, IDC_ARROW);
   descriptor.lpfnWndProc = process;
   class_atom = RegisterClassExW(&descriptor);
@@ -418,8 +426,9 @@ auto Win32::Provider::get_presentation() -> Presentation {
             return VK_ERROR_INITIALIZATION_FAILED;
           }
 
+          constexpr auto function_name = "vkCreateWin32SurfaceKHR\0"_view;
           auto create = Data::bit_cast<PFN_vkCreateWin32SurfaceKHR>(
-              load(instance, "vkCreateWin32SurfaceKHR"));
+              load(instance, Data::cast<const char>(function_name.get_data())));
           if (!create) {
             return VK_ERROR_EXTENSION_NOT_PRESENT;
           }
